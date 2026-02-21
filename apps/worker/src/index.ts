@@ -27,30 +27,18 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY");
 
-/**
- * Build an authenticated clone URL if GITHUB_TOKEN is available.
- * Returns both the actual clone URL and a safe URL for logging.
- */
 function buildCloneUrl(repoUrl: string): { cloneUrl: string; safeUrl: string } {
-  // Normalize to .git
   const normalized = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`;
-
-  if (!GITHUB_TOKEN) {
-    return { cloneUrl: normalized, safeUrl: normalized };
-  }
-
-  // Check if it's a GitHub HTTPS URL
+  if (!GITHUB_TOKEN) return { cloneUrl: normalized, safeUrl: normalized };
   const githubMatch = normalized.match(/^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+)$/);
   if (githubMatch) {
     const owner = githubMatch[1];
     const repo = githubMatch[2];
-    // https://x-access-token:<TOKEN>@github.com/org/repo.git
     return {
       cloneUrl: `https://x-access-token:${GITHUB_TOKEN}@github.com/${owner}/${repo}`,
       safeUrl: `https://github.com/${owner}/${repo}`,
     };
   }
-
   return { cloneUrl: normalized, safeUrl: normalized };
 }
 
@@ -75,17 +63,14 @@ async function walkFiles(repoDir: string, rel = "", depth = 0, maxDepth = 6): Pr
   const dir = path.join(repoDir, rel);
   let out: string[] = [];
   let entries: any[];
-
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
     return [];
   }
-
   for (const e of entries) {
     if (["node_modules", ".git", "dist", ".next", "build", "out", ".turbo"].includes(e.name)) continue;
     const childRel = rel ? path.join(rel, e.name) : e.name;
-
     if (e.isDirectory()) {
       out = out.concat(await walkFiles(repoDir, childRel, depth + 1, maxDepth));
     } else {
@@ -95,26 +80,69 @@ async function walkFiles(repoDir: string, rel = "", depth = 0, maxDepth = 6): Pr
   return out;
 }
 
-async function summarizePackageJson(repoDir: string, rel: string) {
-  const raw = await readTextIfExists(repoDir, rel, 200_000);
-  if (!raw) return null;
+// FIX 1: Parse package.json fully and extract ALL deps as a flat known-names list
+interface PackageSummary {
+  file_path: string;
+  name: string | null;
+  scripts: Record<string, string>;
+  deps: Record<string, string>;
+  devDeps: Record<string, string>;
+  allDependencyNames: string[]; // NEW: explicit flat list so Groq can't miss any
+}
+
+async function summarizePackageJson(repoDir: string, rel: string): Promise<{ summary: string; parsed: PackageSummary | null }> {
+  const raw = await readTextIfExists(repoDir, rel, 500_000); // raised limit
+  if (!raw) return { summary: "", parsed: null };
 
   try {
     const j = JSON.parse(raw);
-    return JSON.stringify(
-      {
-        file_path: rel,
-        name: j.name ?? null,
-        scripts: j.scripts ?? {},
-        deps: j.dependencies ?? {},
-        devDeps: j.devDependencies ?? {},
-      },
-      null,
-      2
-    );
+    const deps: Record<string, string> = j.dependencies ?? {};
+    const devDeps: Record<string, string> = j.devDependencies ?? {};
+    const peerDeps: Record<string, string> = j.peerDependencies ?? {};
+
+    const allDependencyNames = [
+      ...Object.keys(deps),
+      ...Object.keys(devDeps),
+      ...Object.keys(peerDeps),
+    ];
+
+    const parsed: PackageSummary = {
+      file_path: rel,
+      name: j.name ?? null,
+      scripts: j.scripts ?? {},
+      deps,
+      devDeps,
+      allDependencyNames,
+    };
+
+    const summary = JSON.stringify(parsed, null, 2);
+    return { summary, parsed };
   } catch {
-    return raw.slice(0, 30_000);
+    return { summary: raw.slice(0, 30_000), parsed: null };
   }
+}
+
+// FIX 2: Collect all package.json dep names across the whole repo
+async function collectAllDependencyNames(repoDir: string, allPaths: string[]): Promise<string[]> {
+  const pkgJsonPaths = allPaths.filter(p => p.endsWith("package.json"));
+  const allNames = new Set<string>();
+
+  for (const rel of pkgJsonPaths) {
+    const raw = await readTextIfExists(repoDir, rel, 500_000);
+    if (!raw) continue;
+    try {
+      const j = JSON.parse(raw);
+      for (const key of [
+        ...Object.keys(j.dependencies ?? {}),
+        ...Object.keys(j.devDependencies ?? {}),
+        ...Object.keys(j.peerDependencies ?? {}),
+      ]) {
+        allNames.add(key);
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  return Array.from(allNames);
 }
 
 async function buildEvidencePack(repoDir: string) {
@@ -144,14 +172,23 @@ async function buildEvidencePack(repoDir: string) {
       low === "readme" ||
       low.endsWith("next.config.js") ||
       low.endsWith("next.config.mjs") ||
+      low.endsWith("next.config.ts") ||
       low.endsWith("tailwind.config.js") ||
       low.endsWith("tailwind.config.ts") ||
       low.endsWith("dockerfile") ||
       low.endsWith("docker-compose.yml") ||
-      low.endsWith("prisma/schema.prisma") ||
+      low.endsWith("docker-compose.yaml") ||
+      low.includes("prisma/schema.prisma") ||
       low.startsWith(".github/workflows/") ||
       low.endsWith("tsconfig.json") ||
-      low.endsWith("manage.py")
+      low.endsWith("manage.py") ||
+      low.endsWith(".eslintrc") ||
+      low.endsWith(".eslintrc.js") ||
+      low.endsWith(".eslintrc.json") ||
+      low.endsWith("eslint.config.js") ||
+      low.endsWith("eslint.config.mjs") ||
+      low.endsWith("vite.config.ts") ||
+      low.endsWith("vite.config.js")
     );
   };
 
@@ -159,110 +196,108 @@ async function buildEvidencePack(repoDir: string) {
 
   const priority = (p: string) => {
     const low = p.toLowerCase();
-    // P1: Primary Manifests
-    if (
-      low.endsWith("package.json") ||
-      low.endsWith("go.mod") ||
-      low.endsWith("requirements.txt") ||
-      low.endsWith("pyproject.toml") ||
-      low.endsWith("composer.json") ||
-      low.endsWith("cargo.toml") ||
-      low.endsWith("gemfile")
-    ) return 1;
-
-    // P2: README
-    if (low.endsWith("readme.md") || low === "readme") return 2;
-
-    // P3: High-signal Configs
-    if (low.includes("prisma/schema.prisma")) return 3;
-    if (low.includes("next.config.")) return 4;
-    if (low.includes("tailwind.config.")) return 5;
-
-    // P4: CI/CD & Infra
-    if (low.includes(".github/workflows/")) return 6;
-    if (low.endsWith("dockerfile") || low.endsWith("docker-compose.yml")) return 7;
-
-    // P5: Build/Env Configs
-    if (low.endsWith("tsconfig.json") || low.endsWith("manage.py") || low.endsWith("pom.xml") || low.endsWith("build.gradle")) return 8;
-
-    // P6: Lockfiles (Secondary)
-    if (
-      low.endsWith("pnpm-lock.yaml") ||
-      low.endsWith("yarn.lock") ||
-      low.endsWith("package-lock.json") ||
-      low.endsWith("go.sum") ||
-      low.endsWith("composer.lock")
-    ) return 9;
-
-    return 10;
+    if (low.endsWith("package.json")) return 1;
+    if (low.endsWith("go.mod") || low.endsWith("requirements.txt") || low.endsWith("pyproject.toml") || low.endsWith("composer.json") || low.endsWith("cargo.toml") || low.endsWith("gemfile")) return 2;
+    if (low.endsWith("readme.md") || low === "readme") return 3;
+    if (low.includes("prisma/schema.prisma")) return 4;
+    if (low.includes("next.config.")) return 5;
+    if (low.includes("tailwind.config.")) return 6;
+    if (low.startsWith(".github/workflows/")) return 7;
+    if (low.endsWith("dockerfile") || low.endsWith("docker-compose.yml") || low.endsWith("docker-compose.yaml")) return 8;
+    if (low.endsWith("tsconfig.json") || low.endsWith("vite.config.ts") || low.endsWith("vite.config.js")) return 9;
+    if (low.endsWith("pnpm-lock.yaml") || low.endsWith("yarn.lock") || low.endsWith("package-lock.json") || low.endsWith("go.sum") || low.endsWith("composer.lock")) return 10;
+    return 11;
   };
 
   selected.sort((a, b) => priority(a) - priority(b));
 
-  const maxFiles = 15;
+  const maxFiles = 20; // raised from 15
   const chosen = selected.slice(0, maxFiles);
 
   for (const rel of chosen) {
     let content: string | null = null;
-
     if (rel.endsWith("package.json")) {
-      content = await summarizePackageJson(repoDir, rel);
+      const { summary } = await summarizePackageJson(repoDir, rel);
+      content = summary || null;
     } else {
-      const maxChars =
-        rel.endsWith("pnpm-lock.yaml") || rel.endsWith("yarn.lock") || rel.endsWith("package-lock.json")
-          ? 8_000
-          : 20_000;
+      const maxChars = (rel.endsWith("pnpm-lock.yaml") || rel.endsWith("yarn.lock") || rel.endsWith("package-lock.json"))
+        ? 8_000
+        : 20_000;
       content = await readTextIfExists(repoDir, rel, maxChars);
     }
-
     if (content) files.push({ file_path: rel, content });
   }
 
+  // FIX 3: collect the full flat dep name list separately for prompt injection
+  const allDependencyNames = await collectAllDependencyNames(repoDir, allPaths);
+
   const foundPaths = files.map((f) => f.file_path);
-
   console.log("[Worker] Evidence found:", foundPaths);
-  console.log("[Worker] Evidence sizes:", files.map((f) => ({ p: f.file_path, n: f.content.length })));
+  console.log("[Worker] Total unique dep names found:", allDependencyNames.length);
 
-  return { foundPaths, files };
+  return { foundPaths, files, allDependencyNames };
 }
 
-async function groqDetectComponents(input: { foundPaths: string[]; files: Array<{ file_path: string; content: string }> }) {
+async function groqDetectComponents(input: {
+  foundPaths: string[];
+  files: Array<{ file_path: string; content: string }>;
+  allDependencyNames: string[]; // FIX 4: pass explicit dep names
+}) {
   const url = "https://api.groq.com/openai/v1/chat/completions";
 
+  // FIX 5: Much more aggressive system prompt
   const system = `
-You are a comprehensive repository technical auditor. Your goal is to map the ENTIRE technology stack of a repository.
+You are a thorough repository technology stack auditor. Your job is to detect EVERY meaningful library, framework, tool, and language used in the repository.
 
-You MUST identify:
-1. **Physical Layers**: Languages (TS, Go), Frameworks (Next.js, Gin), Databases (Prisma, Postgres).
-2. **UI/UX Infrastructure**: Component libraries (Radix, Shadcn, Lucide), Visualization (Recharts), Animation (Framer Motion).
-3. **Internal Logic**: Validation (Zod), Data Fetching (Axios, TanStack Query, SWR), Utilities (Date-fns, Clsx).
-4. **Ops/Dev**: CI/CD (GitHub Actions), Dev Tools (ESLint, Prettier), Build Tools (Vite, Turbopack).
+## CRITICAL RULE: You MUST create one component entry for EVERY package name in the "all_dependency_names" list provided by the user.
+Do NOT skip any package. If you don't know what a package does, describe it generically.
 
-You MUST output a single JSON object with EXACT shape:
+You MUST identify all categories:
+- **Languages**: TypeScript, JavaScript, Python, Go, Rust, etc.
+- **Frameworks**: Next.js, React, Vue, Nuxt, Express, FastAPI, Gin, etc.
+- **UI Libraries**: Radix UI (each @radix-ui/* is its own component), Shadcn, Lucide React, etc.
+- **State Management**: TanStack Query, SWR, Redux, Zustand, Jotai, etc.
+- **Animation**: Framer Motion, Motion, etc.
+- **Forms & Validation**: React Hook Form, Zod, Yup, etc.
+- **Data/Tables**: TanStack Table, Recharts, etc.
+- **Styling**: Tailwind CSS, class-variance-authority, clsx, tailwind-merge, etc.
+- **Utilities**: date-fns, axios, etc.
+- **Carousel/UI components**: Embla Carousel, Swiper, etc.
+- **Auth**: NextAuth, better-auth, etc.
+- **Database/ORM**: Prisma, @prisma/client, etc.
+- **File Upload**: UploadThing, etc.
+- **Build/Dev Tools**: ESLint, TypeScript, Vite, etc.
+- **CI/CD & Infra**: GitHub Actions, Docker, etc.
+
+## Output Format
+Output a single JSON object with EXACT shape:
 {
   "components": [
     {
-      "name": "string (e.g., 'Framer Motion')",
+      "name": "Human-readable name (e.g. 'Framer Motion', 'Radix UI Accordion')",
       "type": "language|framework|library|ui_component|state_management|validation|animation|database|cache|ci_cd|tooling|infra|testing|other",
       "version": "string or null",
-      "confidence": number,
-      "description": "string — 1-2 sentences, plain English, explaining what this component does in this repo",
+      "confidence": 0.0-1.0,
+      "description": "1-2 sentences what this does in this repo",
       "evidence": [
-        { "file_path": "string from found_files", "snippet": "short quote proof of existence" }
+        { "file_path": "path from found_files", "snippet": "short proof" }
       ]
     }
   ]
 }
 
-Rules:
-- Be GREEDY: If a library is significant, detect it.
-- Evidence is HIGHLY ENCOURAGED. If you cannot find a direct snippet but are certain the component exists (e.g., from package.json keys), include it and use "Detected via project metadata" as the snippet.
-- Every component MUST have a description (non-empty string, max 300 characters).
-- evidence.file_path MUST be one of found_files or 'metadata'.
+## Rules
+- Create an entry for EVERY item in all_dependency_names. No exceptions.
+- For @radix-ui/* packages, group them as one entry named "Radix UI" unless there are many; or split by component.
+- confidence should be 1.0 for anything explicitly listed in package.json.
+- evidence.file_path MUST be one of found_files.
+- description must be a non-empty string.
 `.trim();
 
   const user = {
     found_files: input.foundPaths,
+    // FIX 6: Explicitly pass the dep names so the model CANNOT miss them
+    all_dependency_names: input.allDependencyNames,
     file_contents: input.files.map((f) => ({ file_path: f.file_path, content: f.content })),
   };
 
@@ -274,6 +309,8 @@ Rules:
     ],
     temperature: 0,
     response_format: { type: "json_object" },
+    // FIX 7: Raise max_tokens so a large dep list isn't cut off
+    max_tokens: 8000,
   };
 
   const resp = await fetch(url, {
@@ -304,25 +341,25 @@ Rules:
         continue;
       }
 
-      // Sanitize description
       if (typeof c.description !== "string" || !c.description.trim()) {
         c.description = "No description available.";
       } else {
         c.description = c.description.trim().slice(0, 500);
       }
 
-      // Handle missing or invalid evidence
       if (!Array.isArray(c.evidence) || c.evidence.length === 0) {
-        c.evidence = [{ file_path: "package.json", snippet: "Detected via repository metadata" }];
+        // Find any package.json in found files
+        const pkgFile = input.foundPaths.find(p => p.endsWith("package.json")) ?? input.foundPaths[0] ?? "package.json";
+        c.evidence = [{ file_path: pkgFile, snippet: "Detected via project dependencies" }];
       }
 
       const validEvidence = [];
       for (const ev of c.evidence) {
-        if (ev.file_path === "metadata" || !ev.file_path) {
-          validEvidence.push({ file_path: "package.json", snippet: ev.snippet || "Detected via metadata" });
+        if (!ev.file_path || ev.file_path === "metadata") {
+          const pkgFile = input.foundPaths.find(p => p.endsWith("package.json")) ?? "package.json";
+          validEvidence.push({ file_path: pkgFile, snippet: ev.snippet || "Detected via metadata" });
           continue;
         }
-
         if (allowed.has(ev.file_path)) {
           validEvidence.push({
             file_path: ev.file_path,
@@ -332,7 +369,8 @@ Rules:
       }
 
       if (validEvidence.length === 0) {
-        validEvidence.push({ file_path: "package.json", snippet: "Detected via project metadata" });
+        const pkgFile = input.foundPaths.find(p => p.endsWith("package.json")) ?? "package.json";
+        validEvidence.push({ file_path: pkgFile, snippet: "Detected via project metadata" });
       }
 
       c.evidence = validEvidence;
@@ -395,7 +433,6 @@ async function processJob(jobId: number, repoId: number) {
   );
 
   const repo = await getRepo(repoId);
-
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "repoly-"));
   const repoDir = path.join(tmpDir, "repo");
 
@@ -449,9 +486,7 @@ async function pollOnce() {
     LIMIT 1
     `
   );
-
   if (res.rows.length === 0) return;
-
   await processJob(Number(res.rows[0].id), Number(res.rows[0].repo_id));
 }
 
