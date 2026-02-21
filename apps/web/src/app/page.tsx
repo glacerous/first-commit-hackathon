@@ -6,6 +6,7 @@ import Image from 'next/image';
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const validateAndNormalize = (input: string) => {
     const trimmed = input.trim();
@@ -28,15 +29,60 @@ export default function Home() {
     return null;
   };
 
-  const handleAnalyze = () => {
-    const normalized = validateAndNormalize(repoUrl);
-    if (normalized) {
-      setError('');
-      window.location.href = `/lab?repo=${encodeURIComponent(normalized)}`;
-    } else {
-      setError('Please enter a valid GitHub repository URL (e.g., owner/repo)');
+  const parseOwnerRepo = (normalizedUrl: string) => {
+  // normalizedUrl: https://github.com/owner/repo
+  const m = normalizedUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/);
+  if (!m) return null;
+  return { owner: m[1], name: m[2] };
+};
+
+  const handleAnalyze = async () => {
+  const normalized = validateAndNormalize(repoUrl);
+  if (!normalized) {
+    setError('Please enter a valid GitHub repository URL (e.g., owner/repo)');
+    return;
+  }
+
+  const parsed = parseOwnerRepo(normalized);
+  if (!parsed) {
+    setError('Could not parse owner/repo from URL');
+    return;
+  }
+
+  setError('');
+  setLoading(true);
+
+  try {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3001';
+
+    const res = await fetch(`${apiBase}/api/repos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: normalized,
+        owner: parsed.owner,
+        name: parsed.name,
+        default_branch: 'main', // optional, backend fallback juga 'main'
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || `Request failed: ${res.status}`);
     }
-  };
+
+    const data: { repoId: number; jobId: number } = await res.json();
+
+    // redirect ke lab pakai id (lebih stabil dari URL)
+    window.location.href = `/lab?repoId=${encodeURIComponent(String(data.repoId))}&jobId=${encodeURIComponent(
+      String(data.jobId)
+    )}`;
+  } catch (e: any) {
+    setError(e?.message ? `API error: ${e.message}` : 'API error');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fillExample = (example: string) => {
     setRepoUrl(example);
@@ -152,9 +198,10 @@ export default function Home() {
             />
             <button
               onClick={handleAnalyze}
-              className="h-full rounded-full bg-white px-8 text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-95"
+              disabled={loading}
+              className="h-full rounded-full bg-white px-8 text-sm font-semibold text-black transition-all hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Analyze
+              {loading ? 'Analyzing…' : 'Analyze'}
             </button>
           </div>
 
