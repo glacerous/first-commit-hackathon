@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 export default function Home() {
   return (
@@ -50,8 +51,8 @@ export default function Home() {
       {/* Navbar */}
       <nav className="absolute top-0 left-0 right-0 z-50 flex w-full items-center justify-between px-6 py-5 lg:px-[120px] lg:py-[20px]">
         <div className="flex items-center gap-[30px]">
-          <div className="text-[20px] font-bold tracking-tighter">REPOLY</div>
-
+          {/* <div className="text-[20px] font-bold tracking-tighter">REPOLY</div> */}
+          <Image src="./repoly.svg" alt="REPOLY" width={100} height={100} />
           <div className="hidden items-center gap-[30px] lg:flex">
             {['Product', 'How it Works', '3D Demo', 'Docs'].map((item) => (
               <a
