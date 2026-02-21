@@ -5,10 +5,13 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const {Pool} = pg
+const { Pool } = pg
 
 const app = express();
-export const pool = new Pool({
+export const pool = new Pool(process.env.DATABASE_URL ? {
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+} : {
   host: process.env.PGHOST,
   port: Number(process.env.PGPORT),
   database: process.env.PGDATABASE,
@@ -21,40 +24,40 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/health", (req, res) => {
-    res.json({ status: "ok" });
+  res.json({ status: "ok" });
 });
 
 // Register a new repository and trigger analysis
 app.post("/api/repos", async (req, res) => {
-    const { url, owner, name, default_branch } = req.body;
+  const { url, owner, name, default_branch } = req.body;
 
-    if (!url || !owner || !name) {
-        return res.status(400).json({ error: "Missing required fields: url, owner, name" });
-    }
+  if (!url || !owner || !name) {
+    return res.status(400).json({ error: "Missing required fields: url, owner, name" });
+  }
 
-    try {
-        // 1. Insert or get Repo
-        const repoRes = await pool.query(
-            'INSERT INTO repos (url, owner, name, default_branch) VALUES ($1, $2, $3, $4) ON CONFLICT (url) DO UPDATE SET updated_at = NOW() RETURNING id',
-            [url, owner, name, default_branch || 'main']
-        );
-        const repoId = repoRes.rows[0].id;
+  try {
+    // 1. Insert or get Repo
+    const repoRes = await pool.query(
+      'INSERT INTO repos (url, owner, name, default_branch) VALUES ($1, $2, $3, $4) ON CONFLICT (url) DO UPDATE SET updated_at = NOW() RETURNING id',
+      [url, owner, name, default_branch || 'main']
+    );
+    const repoId = repoRes.rows[0].id;
 
-        // 2. Create Analysis Job
-        const jobRes = await pool.query(
-            'INSERT INTO analysis_jobs (repo_id, status) VALUES ($1, $2) RETURNING id',
-            [repoId, 'pending']
-        );
+    // 2. Create Analysis Job
+    const jobRes = await pool.query(
+      'INSERT INTO analysis_jobs (repo_id, status) VALUES ($1, $2) RETURNING id',
+      [repoId, 'pending']
+    );
 
-        res.status(201).json({
-            message: "Repository registered and analysis scheduled",
-            repoId,
-            jobId: jobRes.rows[0].id
-        });
-    } catch (error: any) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
+    res.status(201).json({
+      message: "Repository registered and analysis scheduled",
+      repoId,
+      jobId: jobRes.rows[0].id
+    });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // List all repositories

@@ -18,7 +18,12 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: always
     environment:
-      - DATABASE_URL="postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable"
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=${PGDATABASE:-first_commit}
+      - PGUSER=${PGUSER:-first_commit}
+      - PGPASSWORD=${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}
+      - DATABASE_URL=postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable
       - PORT=3001
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_MODEL=${GROQ_MODEL}
@@ -33,7 +38,12 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: always
     environment:
-      - DATABASE_URL="postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable"
+      - PGHOST=db
+      - PGPORT=5432
+      - PGDATABASE=${PGDATABASE:-first_commit}
+      - PGUSER=${PGUSER:-first_commit}
+      - PGPASSWORD=${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}
+      - DATABASE_URL=postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_MODEL=${GROQ_MODEL}
     depends_on:

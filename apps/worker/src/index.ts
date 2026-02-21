@@ -8,7 +8,10 @@ import os from "node:os";
 dotenv.config();
 const { Pool } = pg;
 
-const pool = new Pool({
+const pool = new Pool(process.env.DATABASE_URL ? {
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+} : {
   host: process.env.PGHOST,
   port: Number(process.env.PGPORT),
   database: process.env.PGDATABASE,
