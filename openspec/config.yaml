@@ -1,20 +1,171 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Product: Repoly — "See the tech stack as a city"
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  === Product Intent ===
+  Repoly membantu pengguna memahami repository GitHub secara cepat dan visual,
+  khususnya untuk vibe coder dan junior developer.
+  Semua insight harus grounded ke struktur kode dan file nyata.
+
+  === PRD Alignment ===
+  P0:
+    - Import public GitHub repo
+    - Detect tech stack & structure
+    - Visualize stack as low-poly city
+    - Drill-down per component (what, why, where in code)
+  P1:
+    - Repo-aware chatbot (grounded answers)
+    - Learning prompts & explain-like-I’m-new mode
+
+  Non-goals:
+    - Modifying repo source code
+    - Security audit / compliance tooling
+    - 100% perfect detection for all edge cases
+
+  === Hackathon Infrastructure Constraints (MANDATORY) ===
+  Deployment environment is PROVIDED by hackathon team:
+  - Domain:
+      Defined in domain.txt
+      Format: https://<team-name>.hackathon.sev-2.com
+      Must be used in Kubernetes Ingress.
+  - Database:
+      PostgreSQL credentials provided in db-credentials.txt
+      Each team has isolated schema.
+      App must connect using provided host, port, username, password, database.
+  - Kubernetes:
+      kubeconfig.yaml provided.
+      App is deployed into team namespace.
+      kubectl --kubeconfig=./kubeconfig.yaml -n <team-name> ...
+  - Redis is NOT used
+  - All async jobs must be coordinated via PostgreSQL
+
+  === Architectural Consequences ===
+  - Application MUST be dockerized.
+  - Application MUST be stateless.
+  - Persistent state ONLY via PostgreSQL.
+  - No local filesystem dependency in runtime.
+  - Repo contents are NOT stored permanently (only metadata + evidence excerpts).
+
+  === Suggested Architecture (Aligned with Infra) ===
+  - Web: Next.js (App Router) + TypeScript
+  - API: Node.js (Express) as separate container
+  - Worker: Node.js worker container for repo analysis
+  - Job Processing: Database-backed job queue using PostgreSQL (NO Redis)
+  - DB: PostgreSQL (provided by panitia)
+  - LLM: External API (stateless, no model hosting)
+
+  === Conventions ===
+  - Strict TypeScript
+  - Conventional commits
+  - Every detected component MUST have evidence
+  - If evidence is missing → do not hallucinate
+
+rules:
+  spec:
+    - All specs must respect hackathon infra constraints.
+    - No spec may assume custom cloud, object storage, or managed queue unless explicitly optional.
+    - Every feature must trace to PRD AND be deployable on provided Kubernetes.
+
+  tasks:
+    - Max 2 hours per task.
+    - Each task references spec section ID.
+    - P0 tasks must be infra-safe (deployable early).
+
+  api:
+    - REST first.
+    - Async jobs must support polling (no WebSocket dependency).
+    - API responses must be stable & versioned.
+
+  llm:
+    - LLM answers MUST cite evidence (file paths + excerpts).
+    - If evidence insufficient → answer "cannot determine from repo".
+
+  security:
+    - Only public GitHub repos allowed.
+    - No secrets from repo are persisted.
+    - Only metadata & short excerpts are stored.
+
+artifacts:
+  - id: spec.system
+    title: System Specification — Repoly (Infra-Aware)
+    type: spec
+    priority: P0
+    output: markdown
+    content: |
+      # Repoly — System Specification
+
+      ## 1. System Overview
+      Repoly is a web-based system that analyzes public GitHub repositories
+      and visualizes their technology stack as a low-poly city.
+
+      The system is designed to run fully inside a Kubernetes cluster
+      provided by the hackathon organizers.
+
+      ## 2. Deployment Topology
+      Containers:
+      - web: Next.js frontend
+      - api: REST API service
+      - worker: background analysis processor
+
+      External dependencies:
+      - PostgreSQL (provided)
+      - LLM API (external)
+
+      ## 3. Runtime Constraints
+      - No local disk persistence
+      - Horizontal scaling safe
+      - Jobs must be resumable / idempotent
+
+      ## 4. Data Persistence Policy
+      Persisted:
+      - Repo metadata
+      - Detected components
+      - Evidence (file path + short excerpt)
+      - Analysis job state
+
+      Not persisted:
+      - Full repo source code
+      - Git history
+      - Secrets or env files from repo
+
+  - id: spec.data
+    title: Data Model Specification
+    type: spec
+    priority: P0
+    output: markdown
+    content: |
+      # Data Model
+
+      Repo(id, url, owner, name, default_branch)
+      AnalysisJob(id, repo_id, status, progress, error)
+      DetectedComponent(id, repo_id, kind, name, confidence, description)
+      Evidence(id, component_id, path, reason, excerpt, line_start, line_end)
+      EntryPoint(id, repo_id, path, type, reason)
+
+      Notes:
+      - Evidence.excerpt max length enforced
+      - All relations use FK (PostgreSQL)
+
+  - id: tasks.deploy
+    title: Deployment Tasks (Hackathon)
+    type: tasks
+    priority: P0
+    output: markdown
+    content: |
+      # Deployment Tasks
+
+      ## D1 — Containerization
+      - [ ] Dockerfile for web
+      - [ ] Dockerfile for api
+      - [ ] Dockerfile for worker
+
+      ## D2 — Kubernetes manifests
+      - [ ] Deployment + Service for each container
+      - [ ] Ingress using domain from domain.txt
+      - [ ] Secrets from db-credentials.txt
+
+      ## D3 — Verification
+      - [ ] kubectl get pods healthy
+      - [ ] App accessible via public domain
+      - [ ] Repo import flow works end-to-end
