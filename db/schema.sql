@@ -60,3 +60,7 @@ CREATE INDEX IF NOT EXISTS idx_analysis_jobs_repo_created
 ON public.analysis_jobs (repo_id, created_at DESC);
 
 COMMIT;
+
+-- Add description to detected_components for LLM-generated descriptions
+ALTER TABLE public.detected_components
+ADD COLUMN IF NOT EXISTS description TEXT;

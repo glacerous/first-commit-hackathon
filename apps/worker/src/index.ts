@@ -163,6 +163,7 @@ You MUST output a single JSON object with EXACT shape:
       "type": "language|framework|database|cache|ci_cd|tooling|infra|testing|other",
       "version": "string or null",
       "confidence": number,
+      "description": "string — 1-2 sentences, plain English, explaining what this component does in the context of this repo",
       "evidence": [
         { "file_path": "string from found_files", "snippet": "short quote <=200 chars" }
       ]
@@ -172,6 +173,7 @@ You MUST output a single JSON object with EXACT shape:
 
 Rules:
 - Every component MUST have evidence with at least 1 item.
+- Every component MUST have a description (non-empty string, max 300 characters).
 - evidence.file_path MUST be one of found_files.
 - evidence.snippet MUST be a direct quote from the provided file content.
 - Use ONLY provided evidence; if not supported, omit the component.
@@ -214,6 +216,12 @@ Rules:
   for (const c of parsed.components) {
     if (!c?.name || !c?.type || typeof c?.confidence !== "number") throw new Error("Invalid component fields");
     if (!Array.isArray(c.evidence) || c.evidence.length === 0) throw new Error(`Component ${c.name} missing evidence`);
+    // Validate and normalize description
+    if (typeof c.description === "string") {
+      c.description = c.description.trim().slice(0, 500) || null;
+    } else {
+      c.description = null;
+    }
     for (const ev of c.evidence) {
       if (!allowed.has(ev.file_path)) throw new Error(`Invalid evidence file_path: ${ev.file_path}`);
       if (typeof ev.snippet !== "string") throw new Error("Evidence snippet must be string");
@@ -226,6 +234,7 @@ Rules:
     type: string;
     version: string | null;
     confidence: number;
+    description: string | null;
     evidence: Array<{ file_path: string; snippet: string }>;
   }>;
 }
@@ -244,11 +253,11 @@ async function insertAll(repoId: number, comps: any[]) {
   for (const c of comps) {
     const ins = await pool.query(
       `
-      INSERT INTO public.detected_components (repo_id, name, type, version, confidence)
-      VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO public.detected_components (repo_id, name, type, version, confidence, description)
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id
       `,
-      [repoId, c.name, c.type, c.version ?? null, c.confidence]
+      [repoId, c.name, c.type, c.version ?? null, c.confidence, c.description ?? null]
     );
     const componentId = Number(ins.rows[0].id);
 
@@ -310,7 +319,7 @@ async function processJob(jobId: number, repoId: number) {
   } finally {
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {}
+    } catch { }
   }
 }
 

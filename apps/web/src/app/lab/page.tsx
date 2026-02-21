@@ -1,12 +1,51 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function LabPage() {
     const containerRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
     const repo = searchParams.get('repo');
+
+    // --- REAL API DATA ---
+    const [apiComponents, setApiComponents] = useState<any[]>([]);
+    const [selectedComponent, setSelectedComponent] = useState<any>(null);
+    const onBuildingClickRef = useRef<((data: any) => void) | null>(null);
+    // Keep a ref so Three.js closure can read latest API data without re-running useEffect
+    const apiComponentsRef = useRef<any[]>([]);
+
+    // Fetch components from API when repo is known
+    useEffect(() => {
+        if (!repo) return;
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        // Find repo in API first
+        fetch(`${API_BASE}/api/repos`)
+            .then(r => r.json())
+            .then((repos: any[]) => {
+                const found = repos.find(r => r.url === repo);
+                if (!found) return;
+                return fetch(`${API_BASE}/api/repos/${found.id}`).then(r => r.json());
+            })
+            .then(data => {
+                if (data?.components) setApiComponents(data.components);
+            })
+            .catch(err => console.warn('[Lab] API fetch failed:', err));
+    }, [repo]);
+
+    // Keep apiComponentsRef in sync with state
+    useEffect(() => {
+        apiComponentsRef.current = apiComponents;
+    }, [apiComponents]);
+
+    // Bridge: set the callback so Three.js onClick can update React state
+    useEffect(() => {
+        onBuildingClickRef.current = (data: any) => {
+            setSelectedComponent(data);
+        };
+    }, []);
+
+    const closeModal = useCallback(() => setSelectedComponent(null), []);
 
     useEffect(() => {
         if (typeof window === 'undefined' || !containerRef.current) return;
@@ -48,7 +87,7 @@ export default function LabPage() {
             const { GammaCorrectionShader } = await eval(`import('https://unpkg.com/three@0.161.0/examples/jsm/shaders/GammaCorrectionShader.js')`);
             const { RoundedBoxGeometry } = await eval(`import('https://unpkg.com/three@0.161.0/examples/jsm/geometries/RoundedBoxGeometry.js')`);
 
-            // --- MOCK DATA ---
+            // --- MOCK DATA (visual shapes / layout) ---
             const MOCK = {
                 languages: [
                     { name: "TypeScript", pct: 85 }, { name: "Go", pct: 65 },
@@ -105,9 +144,9 @@ export default function LabPage() {
             let hoveredGroup = null;
             let cablesGroup;
 
-            const pickables = [];
-            const animatables = [];
-            const districtGroups = {};
+            const pickables: any[] = [];
+            const animatables: any[] = [];
+            const districtGroups: any = {};
 
             const init = () => {
                 scene = new THREE.Scene();
@@ -218,8 +257,10 @@ export default function LabPage() {
 
             const getTerrainY = (x, z) => pseudoNoise(x, z) - 50;
 
-            const createAssetMaterial = (category = 'default') => {
-                const color = THEME.tints[category] || THEME.tints.default;
+            const createAssetMaterial = (param: any = 'default') => {
+                const color = typeof param === 'string'
+                    ? (THEME.tints[param] || THEME.tints.default)
+                    : (param.color || THEME.tints.default);
                 return new THREE.MeshStandardMaterial({ color: color, roughness: 0.9, metalness: 0.0, transparent: true, opacity: 1.0 });
             };
 
@@ -232,7 +273,7 @@ export default function LabPage() {
                 group.add(line);
             };
 
-            const finalizeAsset = (group, name, category, info, distId) => {
+            const finalizeAsset = (group, name, category, info, distId, apiData?: any) => {
                 group.traverse(child => {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -240,12 +281,13 @@ export default function LabPage() {
                         if (child.userData.outlined !== false) addTechnicalOutlines(child, group);
                     }
                 });
-                group.userData = { name, category, info, distId };
+                // Attach real API data if available, fallback to mock info
+                group.userData = { name, category, info, distId, ...(apiData || {}) };
                 pickables.push(group);
                 return group;
             };
 
-            const createLanguageTower = (name, pct, distId) => {
+            const createLanguageTower = (name, pct, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 const h = pct * 2.2, w = 18;
                 const bodyGeo = new RoundedBoxGeometry(w, h, w, 2, 2);
@@ -254,10 +296,10 @@ export default function LabPage() {
                 const capGeo = new RoundedBoxGeometry(w + 4, 4, w + 4, 2, 2);
                 const cap = new THREE.Mesh(capGeo.translate(0, h + 2, 0), createAssetMaterial('languages'));
                 group.add(cap);
-                return finalizeAsset(group, name, "Language", `${pct}% Complexity`, distId);
+                return finalizeAsset(group, name, "Language", `${pct}% Complexity`, distId, apiData);
             };
 
-            const createPowerPlant = (name, distId) => {
+            const createPowerPlant = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 const base = new THREE.Mesh(new RoundedBoxGeometry(36, 18, 36, 2, 2).translate(0, 9, 0), createAssetMaterial());
                 group.add(base);
@@ -269,10 +311,10 @@ export default function LabPage() {
                     ring.position.set(i * 10, 24, 0);
                     group.add(ring);
                 }
-                return finalizeAsset(group, name, "Engine", "Processor Core", distId);
+                return finalizeAsset(group, name, "Engine", "Processor Core", distId, apiData);
             };
 
-            const createSilo = (name, distId) => {
+            const createSilo = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 const body = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 55, 32).translate(0, 27.5, 0), createAssetMaterial('storage'));
                 group.add(body);
@@ -284,10 +326,10 @@ export default function LabPage() {
                 });
                 const cap = new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 55, 0), createAssetMaterial('storage'));
                 group.add(cap);
-                return finalizeAsset(group, name, "Storage", "Data Bulk", distId);
+                return finalizeAsset(group, name, "Storage", "Data Bulk", distId, apiData);
             };
 
-            const createSolarField = (name, distId) => {
+            const createSolarField = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 for (let i = 0; i < 9; i++) {
                     const panelGroup = new THREE.Group();
@@ -302,10 +344,10 @@ export default function LabPage() {
                     panelGroup.position.set((i % 3) * 22 - 22, 6, Math.floor(i / 3) * 26 - 26);
                     group.add(panelGroup);
                 }
-                return finalizeAsset(group, name, "Frontend", "UI Cell", distId);
+                return finalizeAsset(group, name, "Frontend", "UI Cell", distId, apiData);
             };
 
-            const createTransmissionTower = (name, distId) => {
+            const createTransmissionTower = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 const pole = new THREE.Mesh(new THREE.CylinderGeometry(2, 9, 85, 4).translate(0, 42.5, 0), createAssetMaterial('devops'));
                 group.add(pole);
@@ -313,10 +355,10 @@ export default function LabPage() {
                     const arm = new THREE.Mesh(new THREE.BoxGeometry(48, 4, 3).translate(0, h, 0), createAssetMaterial('devops'));
                     group.add(arm);
                 }
-                return finalizeAsset(group, name, "DevOps", "Feed Pipeline", distId);
+                return finalizeAsset(group, name, "DevOps", "Feed Pipeline", distId, apiData);
             };
 
-            const createTurbine = (name, distId) => {
+            const createTurbine = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
                 const tower = new THREE.Mesh(new THREE.CylinderGeometry(3, 7, 100, 24).translate(0, 50, 0), createAssetMaterial());
                 group.add(tower);
@@ -331,7 +373,7 @@ export default function LabPage() {
                     blades.add(blade);
                 }
                 animatables.push(() => { blades.rotation.z += 0.04; });
-                return finalizeAsset(group, name, "Tooling", "Gateway", distId);
+                return finalizeAsset(group, name, "Tooling", "Gateway", distId, apiData);
             };
 
             const buildInfrastructure = () => {
@@ -352,7 +394,16 @@ export default function LabPage() {
                     districtGroups[sec.id] = group;
                     scene.add(group);
                     sec.data.forEach((item, i) => {
-                        const asset = sec.fact(item.name, item.pct || 50, sec.id);
+                        // Look up real API component data by name
+                        const apiComp = apiComponentsRef.current.find(
+                            (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+                        );
+                        // Merge real API data into the asset if found
+                        const asset = sec.fact(item.name, item.pct || 50, sec.id, apiComp ? {
+                            description: apiComp.description || null,
+                            version: apiComp.version || null,
+                            confidence: typeof apiComp.confidence === 'number' ? apiComp.confidence : null,
+                        } : undefined);
                         const ax = (i % 2) * 85 - 42 + ox;
                         const az = Math.floor(i / 2) * 85 - 42 + oz;
                         const ay = getTerrainY(ax, az);
@@ -370,7 +421,7 @@ export default function LabPage() {
                     if (!startGroup || !endGroup) return;
                     const startPos = startGroup.position.clone();
                     const endPos = endGroup.position.clone();
-                    const points = [];
+                    const points: any[] = [];
                     const segments = 24;
                     for (let i = 0; i <= segments; i++) {
                         const t = i / segments;
@@ -468,7 +519,16 @@ export default function LabPage() {
                 if (hits.length > 0) {
                     let g = hits[0].object; while (g.parent && !g.userData.name) g = g.parent;
                     focus(g);
-                } else focus(null);
+                    // Signal to React with the component data
+                    if (onBuildingClickRef.current) {
+                        onBuildingClickRef.current(g.userData);
+                    }
+                } else {
+                    focus(null);
+                    if (onBuildingClickRef.current) {
+                        onBuildingClickRef.current(null);
+                    }
+                }
             };
 
             const focus = (g) => {
@@ -541,6 +601,7 @@ export default function LabPage() {
 
         loadGraphics();
         return () => cleanup();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -669,6 +730,106 @@ export default function LabPage() {
           pointer-events: none;
           z-index: 500;
         }
+        /* Description Modal */
+        #desc-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.65);
+          backdrop-filter: blur(6px);
+          animation: fadeIn 0.18s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #desc-modal {
+          background: rgba(10, 12, 16, 0.96);
+          border: 1px solid rgba(46, 242, 200, 0.25);
+          border-radius: 20px;
+          padding: 32px;
+          max-width: 480px;
+          width: 90vw;
+          position: relative;
+          box-shadow: 0 0 60px rgba(46, 242, 200, 0.08), 0 24px 64px rgba(0,0,0,0.8);
+          animation: slideUp 0.22s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-close {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #9ca3af;
+          font-size: 16px;
+          transition: all 0.15s;
+        }
+        .modal-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .modal-type-badge {
+          display: inline-block;
+          padding: 2px 10px;
+          background: rgba(46, 242, 200, 0.12);
+          border: 1px solid rgba(46, 242, 200, 0.3);
+          border-radius: 20px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: #2ef2c8;
+          margin-bottom: 12px;
+        }
+        .modal-name {
+          font-size: 22px;
+          font-weight: 700;
+          color: #e5e7eb;
+          margin-bottom: 4px;
+          letter-spacing: -0.5px;
+        }
+        .modal-version {
+          font-size: 12px;
+          color: #9ca3af;
+          margin-bottom: 16px;
+        }
+        .modal-desc {
+          font-size: 14px;
+          line-height: 1.7;
+          color: #d1d5db;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          padding-top: 16px;
+        }
+        .modal-confidence {
+          margin-top: 16px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .modal-conf-bar-bg {
+          flex: 1;
+          height: 4px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .modal-conf-bar-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #2ef2c8, #86a8ff);
+          border-radius: 2px;
+          transition: width 0.4s ease;
+        }
+        .modal-conf-label {
+          font-size: 10px;
+          color: #9ca3af;
+          min-width: 36px;
+          text-align: right;
+        }
       `}</style>
 
             <div className="global-grid"></div>
@@ -719,6 +880,35 @@ export default function LabPage() {
             </div>
 
             <div id="tooltip"></div>
+
+            {/* Description Modal */}
+            {selectedComponent && (
+                <div id="desc-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+                    <div id="desc-modal">
+                        <button className="modal-close" onClick={closeModal} aria-label="Close">✕</button>
+                        <div className="modal-type-badge">{selectedComponent.category || selectedComponent.type || 'Component'}</div>
+                        <div className="modal-name">{selectedComponent.name}</div>
+                        {selectedComponent.version && (
+                            <div className="modal-version">v{selectedComponent.version}</div>
+                        )}
+                        <div className="modal-desc">
+                            {selectedComponent.description || <em style={{ color: '#6b7280' }}>No description available.</em>}
+                        </div>
+                        {typeof selectedComponent.confidence === 'number' && (
+                            <div className="modal-confidence">
+                                <span className="modal-conf-label" style={{ fontSize: '9px', color: '#9ca3af', minWidth: 'unset' }}>CONFIDENCE</span>
+                                <div className="modal-conf-bar-bg">
+                                    <div
+                                        className="modal-conf-bar-fill"
+                                        style={{ width: `${Math.round(selectedComponent.confidence * 100)}%` }}
+                                    />
+                                </div>
+                                <span className="modal-conf-label">{Math.round(selectedComponent.confidence * 100)}%</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
