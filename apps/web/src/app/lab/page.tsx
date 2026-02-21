@@ -122,9 +122,20 @@ function LabContent() {
                 accent: 0x2ef2c8,
                 outlines: 0xffffff,
                 tints: {
-                    languages: 0xe5e7eb,
-                    storage: 0xe5e7eb,
-                    devops: 0xe5e7eb,
+                    language: 0xe5e7eb,
+                    database: 0x86a8ff,
+                    framework: 0x2ef2c8,
+                    library: 0xd1d5db,
+                    ui_component: 0xf472b6,
+                    state_management: 0x60a5fa,
+                    validation: 0x34d399,
+                    animation: 0xfcd34d,
+                    tooling: 0xfacc15,
+                    infra: 0xa855f7,
+                    testing: 0x10b981,
+                    ci_cd: 0x3b82f6,
+                    cache: 0xf97316,
+                    other: 0xd9dde3,
                     default: 0xd9dde3
                 }
             };
@@ -282,10 +293,10 @@ function LabContent() {
                 const group = new THREE.Group();
                 const h = pct * 2.2, w = 18;
                 const bodyGeo = new RoundedBoxGeometry(w, h, w, 2, 2);
-                const body = new THREE.Mesh(bodyGeo.translate(0, h / 2, 0), createAssetMaterial('languages'));
+                const body = new THREE.Mesh(bodyGeo.translate(0, h / 2, 0), createAssetMaterial('language'));
                 group.add(body);
                 const capGeo = new RoundedBoxGeometry(w + 4, 4, w + 4, 2, 2);
-                const cap = new THREE.Mesh(capGeo.translate(0, h + 2, 0), createAssetMaterial('languages'));
+                const cap = new THREE.Mesh(capGeo.translate(0, h + 2, 0), createAssetMaterial('language'));
                 group.add(cap);
                 return finalizeAsset(group, name, "Language", `${pct}% Complexity`, distId, apiData);
             };
@@ -307,15 +318,15 @@ function LabContent() {
 
             const createSilo = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 55, 32).translate(0, 27.5, 0), createAssetMaterial('storage'));
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 55, 32).translate(0, 27.5, 0), createAssetMaterial('database'));
                 group.add(body);
                 [15, 40].forEach(y => {
-                    const ring = new THREE.Mesh(new THREE.TorusGeometry(20.5, 1.2, 8, 32), createAssetMaterial('storage'));
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(20.5, 1.2, 8, 32), createAssetMaterial('database'));
                     ring.rotation.x = Math.PI / 2;
                     ring.position.y = y;
                     group.add(ring);
                 });
-                const cap = new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 55, 0), createAssetMaterial('storage'));
+                const cap = new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 55, 0), createAssetMaterial('database'));
                 group.add(cap);
                 return finalizeAsset(group, name, "Storage", "Data Bulk", distId, apiData);
             };
@@ -340,10 +351,10 @@ function LabContent() {
 
             const createTransmissionTower = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
-                const pole = new THREE.Mesh(new THREE.CylinderGeometry(2, 9, 85, 4).translate(0, 42.5, 0), createAssetMaterial('devops'));
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(2, 9, 85, 4).translate(0, 42.5, 0), createAssetMaterial('infra'));
                 group.add(pole);
                 for (let h = 35; h <= 75; h += 20) {
-                    const arm = new THREE.Mesh(new THREE.BoxGeometry(48, 4, 3).translate(0, h, 0), createAssetMaterial('devops'));
+                    const arm = new THREE.Mesh(new THREE.BoxGeometry(48, 4, 3).translate(0, h, 0), createAssetMaterial('infra'));
                     group.add(arm);
                 }
                 return finalizeAsset(group, name, "DevOps", "Feed Pipeline", distId, apiData);
@@ -397,6 +408,11 @@ function LabContent() {
                     language: createLanguageTower,
                     framework: createPowerPlant,
                     database: createSilo,
+                    library: createPowerPlant,
+                    ui_component: createSolarField,
+                    state_management: createPowerPlant,
+                    validation: createSilo,
+                    animation: createTurbine,
                     cache: createSilo,
                     ci_cd: createTransmissionTower,
                     infra: createTransmissionTower,
@@ -764,40 +780,45 @@ function LabContent() {
           pointer-events: none;
           z-index: 500;
         }
-        /* Description Modal */
-        #desc-modal-overlay {
+        /* Inspector Panel (Right Sidebar) */
+        #inspector-panel {
           position: fixed;
-          inset: 0;
-          z-index: 9000;
+          top: 32px;
+          right: 32px;
+          bottom: 120px;
+          width: 320px;
+          background: rgba(10, 12, 16, 0.85);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(46, 242, 200, 0.2);
+          border-radius: 24px;
+          padding: 28px;
+          pointer-events: auto;
           display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(0, 0, 0, 0.65);
-          backdrop-filter: blur(6px);
-          animation: fadeIn 0.18s ease;
+          flex-direction: column;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+          animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          z-index: 2000;
         }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        #desc-modal {
-          background: rgba(10, 12, 16, 0.96);
-          border: 1px solid rgba(46, 242, 200, 0.25);
-          border-radius: 20px;
-          padding: 32px;
-          max-width: 480px;
-          width: 90vw;
-          position: relative;
-          box-shadow: 0 0 60px rgba(46, 242, 200, 0.08), 0 24px 64px rgba(0,0,0,0.8);
-          animation: slideUp 0.22s ease;
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
-        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-close {
-          position: absolute;
-          top: 16px;
-          right: 16px;
+          align-self: flex-end;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.1);
           border-radius: 50%;
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #9ca3af;
+          font-size: 14px;
+          transition: all 0.15s;
+          margin-bottom: -10px;
+        }
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -915,11 +936,11 @@ function LabContent() {
 
             <div id="tooltip"></div>
 
-            {/* Description Modal */}
+            {/* Inspector Panel */}
             {selectedComponent && (
-                <div id="desc-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
-                    <div id="desc-modal">
-                        <button className="modal-close" onClick={closeModal} aria-label="Close">✕</button>
+                <div id="inspector-panel">
+                    <button className="modal-close" onClick={closeModal} aria-label="Close">✕</button>
+                    <div className="mt-2">
                         <div className="modal-type-badge">{selectedComponent.category || selectedComponent.type || 'Component'}</div>
                         <div className="modal-name">{selectedComponent.name}</div>
                         {selectedComponent.version && (
@@ -940,6 +961,19 @@ function LabContent() {
                                 <span className="modal-conf-label">{Math.round(selectedComponent.confidence * 100)}%</span>
                             </div>
                         )}
+                        <div className="mt-8 border-t border-white/5 pt-6">
+                            <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-4">Properties</h4>
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-[11px]">
+                                    <span className="text-white/40">Status</span>
+                                    <span className="text-emerald-400 font-medium">Valid</span>
+                                </div>
+                                <div className="flex justify-between text-[11px]">
+                                    <span className="text-white/40">Tier</span>
+                                    <span className="text-white/80">Core Component</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

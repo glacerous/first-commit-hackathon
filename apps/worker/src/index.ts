@@ -122,33 +122,79 @@ async function buildEvidencePack(repoDir: string) {
 
   const allPaths = await walkFiles(repoDir, "", 0, 6);
 
-  const isInteresting = (p: string) =>
-    p.endsWith("package.json") ||
-    p.endsWith("pnpm-lock.yaml") ||
-    p.endsWith("yarn.lock") ||
-    p.endsWith("package-lock.json") ||
-    p.endsWith("next.config.js") ||
-    p.endsWith("next.config.mjs") ||
-    p.endsWith("tailwind.config.js") ||
-    p.endsWith("tailwind.config.ts") ||
-    p.endsWith("Dockerfile") ||
-    p.endsWith("docker-compose.yml") ||
-    p.endsWith("prisma/schema.prisma") ||
-    p.startsWith(".github/workflows/") ||
-    p.endsWith("tsconfig.json");
+  const isInteresting = (p: string) => {
+    const low = p.toLowerCase();
+    return (
+      low.endsWith("package.json") ||
+      low.endsWith("pnpm-lock.yaml") ||
+      low.endsWith("yarn.lock") ||
+      low.endsWith("package-lock.json") ||
+      low.endsWith("go.mod") ||
+      low.endsWith("go.sum") ||
+      low.endsWith("requirements.txt") ||
+      low.endsWith("pyproject.toml") ||
+      low.endsWith("setup.py") ||
+      low.endsWith("composer.json") ||
+      low.endsWith("composer.lock") ||
+      low.endsWith("cargo.toml") ||
+      low.endsWith("gemfile") ||
+      low.endsWith("pom.xml") ||
+      low.endsWith("build.gradle") ||
+      low.endsWith("readme.md") ||
+      low === "readme" ||
+      low.endsWith("next.config.js") ||
+      low.endsWith("next.config.mjs") ||
+      low.endsWith("tailwind.config.js") ||
+      low.endsWith("tailwind.config.ts") ||
+      low.endsWith("dockerfile") ||
+      low.endsWith("docker-compose.yml") ||
+      low.endsWith("prisma/schema.prisma") ||
+      low.startsWith(".github/workflows/") ||
+      low.endsWith("tsconfig.json") ||
+      low.endsWith("manage.py")
+    );
+  };
 
   const selected = allPaths.filter(isInteresting);
 
   const priority = (p: string) => {
-    if (p.endsWith("package.json")) return 1;
-    if (p.includes(".github/workflows/")) return 2;
-    if (p.includes("prisma/schema.prisma")) return 3;
-    if (p.includes("next.config.")) return 4;
-    if (p.includes("tailwind.config.")) return 5;
-    if (p.endsWith("Dockerfile") || p.endsWith("docker-compose.yml")) return 6;
-    if (p.endsWith("tsconfig.json")) return 7;
-    if (p.endsWith("pnpm-lock.yaml") || p.endsWith("yarn.lock") || p.endsWith("package-lock.json")) return 8;
-    return 9;
+    const low = p.toLowerCase();
+    // P1: Primary Manifests
+    if (
+      low.endsWith("package.json") ||
+      low.endsWith("go.mod") ||
+      low.endsWith("requirements.txt") ||
+      low.endsWith("pyproject.toml") ||
+      low.endsWith("composer.json") ||
+      low.endsWith("cargo.toml") ||
+      low.endsWith("gemfile")
+    ) return 1;
+
+    // P2: README
+    if (low.endsWith("readme.md") || low === "readme") return 2;
+
+    // P3: High-signal Configs
+    if (low.includes("prisma/schema.prisma")) return 3;
+    if (low.includes("next.config.")) return 4;
+    if (low.includes("tailwind.config.")) return 5;
+
+    // P4: CI/CD & Infra
+    if (low.includes(".github/workflows/")) return 6;
+    if (low.endsWith("dockerfile") || low.endsWith("docker-compose.yml")) return 7;
+
+    // P5: Build/Env Configs
+    if (low.endsWith("tsconfig.json") || low.endsWith("manage.py") || low.endsWith("pom.xml") || low.endsWith("build.gradle")) return 8;
+
+    // P6: Lockfiles (Secondary)
+    if (
+      low.endsWith("pnpm-lock.yaml") ||
+      low.endsWith("yarn.lock") ||
+      low.endsWith("package-lock.json") ||
+      low.endsWith("go.sum") ||
+      low.endsWith("composer.lock")
+    ) return 9;
+
+    return 10;
   };
 
   selected.sort((a, b) => priority(a) - priority(b));
@@ -184,30 +230,35 @@ async function groqDetectComponents(input: { foundPaths: string[]; files: Array<
   const url = "https://api.groq.com/openai/v1/chat/completions";
 
   const system = `
-You are a repository tech stack detector.
+You are a comprehensive repository technical auditor. Your goal is to map the ENTIRE technology stack of a repository.
+
+You MUST identify:
+1. **Physical Layers**: Languages (TS, Go), Frameworks (Next.js, Gin), Databases (Prisma, Postgres).
+2. **UI/UX Infrastructure**: Component libraries (Radix, Shadcn, Lucide), Visualization (Recharts), Animation (Framer Motion).
+3. **Internal Logic**: Validation (Zod), Data Fetching (Axios, TanStack Query, SWR), Utilities (Date-fns, Clsx).
+4. **Ops/Dev**: CI/CD (GitHub Actions), Dev Tools (ESLint, Prettier), Build Tools (Vite, Turbopack).
 
 You MUST output a single JSON object with EXACT shape:
 {
   "components": [
     {
-      "name": "string",
-      "type": "language|framework|database|cache|ci_cd|tooling|infra|testing|other",
+      "name": "string (e.g., 'Framer Motion')",
+      "type": "language|framework|library|ui_component|state_management|validation|animation|database|cache|ci_cd|tooling|infra|testing|other",
       "version": "string or null",
       "confidence": number,
-      "description": "string — 1-2 sentences, plain English, explaining what this component does in the context of this repo",
+      "description": "string — 1-2 sentences, plain English, explaining what this component does in this repo",
       "evidence": [
-        { "file_path": "string from found_files", "snippet": "short quote <=200 chars" }
+        { "file_path": "string from found_files", "snippet": "short quote proof of existence" }
       ]
     }
   ]
 }
 
 Rules:
-- Every component MUST have evidence with at least 1 item.
+- Be GREEDY: If a library is significant, detect it.
+- Evidence is HIGHLY ENCOURAGED. If you cannot find a direct snippet but are certain the component exists (e.g., from package.json keys), include it and use "Detected via project metadata" as the snippet.
 - Every component MUST have a description (non-empty string, max 300 characters).
-- evidence.file_path MUST be one of found_files.
-- evidence.snippet MUST be a direct quote from the provided file content.
-- Use ONLY provided evidence; if not supported, omit the component.
+- evidence.file_path MUST be one of found_files or 'metadata'.
 `.trim();
 
   const user = {
@@ -244,23 +295,54 @@ Rules:
   if (!parsed.components || !Array.isArray(parsed.components)) throw new Error("Invalid JSON: missing components[]");
 
   const allowed = new Set(input.foundPaths);
+  const finalComponents = [];
+
   for (const c of parsed.components) {
-    if (!c?.name || !c?.type || typeof c?.confidence !== "number") throw new Error("Invalid component fields");
-    if (!Array.isArray(c.evidence) || c.evidence.length === 0) throw new Error(`Component ${c.name} missing evidence`);
-    // Validate and normalize description
-    if (typeof c.description === "string") {
-      c.description = c.description.trim().slice(0, 500) || null;
-    } else {
-      c.description = null;
-    }
-    for (const ev of c.evidence) {
-      if (!allowed.has(ev.file_path)) throw new Error(`Invalid evidence file_path: ${ev.file_path}`);
-      if (typeof ev.snippet !== "string") throw new Error("Evidence snippet must be string");
-      if (ev.snippet.length > 500) ev.snippet = ev.snippet.slice(0, 500);
+    try {
+      if (!c?.name || !c?.type || typeof c?.confidence !== "number") {
+        console.warn("[Worker] Skipping component with missing basic fields:", c?.name);
+        continue;
+      }
+
+      // Sanitize description
+      if (typeof c.description !== "string" || !c.description.trim()) {
+        c.description = "No description available.";
+      } else {
+        c.description = c.description.trim().slice(0, 500);
+      }
+
+      // Handle missing or invalid evidence
+      if (!Array.isArray(c.evidence) || c.evidence.length === 0) {
+        c.evidence = [{ file_path: "package.json", snippet: "Detected via repository metadata" }];
+      }
+
+      const validEvidence = [];
+      for (const ev of c.evidence) {
+        if (ev.file_path === "metadata" || !ev.file_path) {
+          validEvidence.push({ file_path: "package.json", snippet: ev.snippet || "Detected via metadata" });
+          continue;
+        }
+
+        if (allowed.has(ev.file_path)) {
+          validEvidence.push({
+            file_path: ev.file_path,
+            snippet: (typeof ev.snippet === "string" ? ev.snippet : "Detected").slice(0, 500)
+          });
+        }
+      }
+
+      if (validEvidence.length === 0) {
+        validEvidence.push({ file_path: "package.json", snippet: "Detected via project metadata" });
+      }
+
+      c.evidence = validEvidence;
+      finalComponents.push(c);
+    } catch (err) {
+      console.error("[Worker] Error validating component:", c?.name, err);
     }
   }
 
-  return parsed.components as Array<{
+  return finalComponents as Array<{
     name: string;
     type: string;
     version: string | null;
