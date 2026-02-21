@@ -160,9 +160,25 @@ export default function LabPage() {
                 createInfrastructureCables();
                 fitCameraToSceneBounds();
 
+                let isMouseDown = false;
+                let mouseDownPos = { x: 0, y: 0 };
+
                 window.addEventListener('resize', onWindowResize);
                 window.addEventListener('pointermove', onPointerMove);
-                window.addEventListener('click', onClick);
+                window.addEventListener('mousedown', (e) => {
+                    isMouseDown = true;
+                    mouseDownPos = { x: e.clientX, y: e.clientY };
+                });
+                window.addEventListener('mouseup', (e) => {
+                    if (isMouseDown) {
+                        const dx = Math.abs(e.clientX - mouseDownPos.x);
+                        const dy = Math.abs(e.clientY - mouseDownPos.y);
+                        if (dx < 4 && dy < 4) {
+                            onClick();
+                        }
+                    }
+                    isMouseDown = false;
+                });
             };
 
             const pseudoNoise = (x, z) => {
@@ -188,23 +204,16 @@ export default function LabPage() {
                 terrain.position.y = -50;
                 scene.add(terrain);
 
-                const edges = new THREE.EdgesGeometry(geo, 1);
-                const lineMat1 = new THREE.LineBasicMaterial({ color: THEME.line1, transparent: true, opacity: 0.22 });
-                const lines1 = new THREE.LineSegments(edges, lineMat1);
-                lines1.rotation.x = -Math.PI / 2;
-                lines1.position.y = -49.9;
-                scene.add(lines1);
-
-                const lineMat2 = new THREE.LineBasicMaterial({ color: THEME.line2, transparent: true, opacity: 0.10 });
-                const lines2 = new THREE.LineSegments(edges, lineMat2);
-                lines2.rotation.x = -Math.PI / 2;
-                lines2.position.y = -49.8;
-                scene.add(lines2);
-
-                animatables.push(() => {
-                    const t = Date.now() * 0.001;
-                    lineMat1.opacity = 0.18 + 0.06 * Math.sin(t * 0.6);
+                const wireMat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.18
                 });
+                const whiteGrid = new THREE.Mesh(geo, wireMat);
+                whiteGrid.rotation.x = -Math.PI / 2;
+                whiteGrid.position.y = -49.8;
+                scene.add(whiteGrid);
             };
 
             const getTerrainY = (x, z) => pseudoNoise(x, z) - 50;
@@ -464,7 +473,7 @@ export default function LabPage() {
 
             const focus = (g) => {
                 pickables.forEach(pg => {
-                    const isF = pg === g;
+                    const isF = !g || pg === g;
                     pg.traverse(c => { if (c.isMesh) c.material.opacity = isF ? 1.0 : 0.2; });
                 });
             };
