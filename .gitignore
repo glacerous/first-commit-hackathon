@@ -1,4 +1,39 @@
+# Dependencies
 node_modules
-.env
-.next
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Next.js
+.next/
+out/
+
+# Production
+build
 dist
+
+# Environment / Credentials (PROTECT THESE)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.*
+kubeconfig.yaml
+domain.txt
+db-credentials.txt
+*.pem
+*.key
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

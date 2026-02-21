@@ -25,3 +25,9 @@ External dependencies:
 - Horizontal scaling safe
 - Jobs must be resumable / idempotent
 - Repository contents are NOT stored permanently (only metadata + evidence excerpts)
+
+- Postgresql is provided by the hackathon organizers
+- LLM API is external
+- Kubernetes is provided by the hackathon organizers
+- Domain is provided by the hackathon organizers
+- Yang membutuhkan KEY seperti DB, LLM API, dll harus di inject melalui environment variable (buat dulu prototype untuk nanti diganti kredensial aslinya)

@@ -1,4 +1,31 @@
+# Global patterns
 node_modules
-.env
+.git
+.gitignore
+.dockerignore
+*.md
+LICENSE
+README.md
+
+# Build artifacts
 .next
 dist
+build
+out
+coverage
+
+# Credentials & Config (PROTECT THESE)
+.env
+.env.*
+kubeconfig.yaml
+domain.txt
+db-credentials.txt
+*.pem
+*.key
+
+# Change logs / OpenSpec details
+openspec/changes
+Cortex-Task.md
+task.md
+walkthrough.md
+implementation_plan.md
