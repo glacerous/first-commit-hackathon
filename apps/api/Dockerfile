@@ -19,4 +19,4 @@ COPY --from=base /app/apps/api/package.json ./apps/api/
 COPY --from=base /app/apps/api/dist ./apps/api/dist
 
 EXPOSE 3001
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["npm", "run", "start", "-w", "apps/api"]

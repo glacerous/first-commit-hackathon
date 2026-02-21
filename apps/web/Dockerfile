@@ -24,4 +24,4 @@ COPY --from=base /app/apps/web/public ./apps/web/public
 COPY --from=base /app/node_modules ./node_modules
 
 EXPOSE 3000
-CMD ["npm", "start", "-w", "apps/web"]
+CMD ["npm", "run", "start", "-w", "apps/web"]

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function LabPage() {
+function LabContent() {
     const containerRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
     const repo = searchParams.get('repo');
@@ -910,5 +910,17 @@ export default function LabPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function LabPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen w-full items-center justify-center bg-[#070a0f] text-[#2ef2c8]">
+                <div className="text-sm font-bold tracking-widest">INITIALIZING INTERFACE...</div>
+            </div>
+        }>
+            <LabContent />
+        </Suspense>
     );
 }

@@ -3,7 +3,8 @@
     "version": "1.0.0",
     "scripts": {
         "dev": "ts-node-dev src/index.ts",
-        "build": "tsc"
+        "build": "tsc",
+        "start": "node dist/index.js"
     },
     "devDependencies": {
         "@types/pg": "^8.11.11",
@@ -12,6 +13,7 @@
     },
     "dependencies": {
         "dotenv": "^17.3.1",
-        "pg": "^8.18.0"
+        "pg": "^8.18.0",
+        "simple-git": "^3.32.0"
     }
 }

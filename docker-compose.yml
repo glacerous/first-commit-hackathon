@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${PGUSER:-first_commit}
+      POSTGRES_PASSWORD: "${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}"
+      POSTGRES_DB: ${PGDATABASE:-first_commit}
+    ports:
+      - "${PGPORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: always
+    environment:
+      - DATABASE_URL="postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable"
+      - PORT=3001
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: always
+    environment:
+      - DATABASE_URL="postgresql://${PGUSER:-first_commit}:${PGPASSWORD:-]U%@U)iBdi1OquuF200oe26UYms8JJE2}@db:5432/${PGDATABASE:-first_commit}?sslmode=disable"
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: always
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

@@ -18,4 +18,4 @@ COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/apps/worker/package.json ./apps/worker/
 COPY --from=base /app/apps/worker/dist ./apps/worker/dist
 
-CMD ["node", "apps/worker/dist/index.js"]
+CMD ["npm", "run", "start", "-w", "apps/worker"]
