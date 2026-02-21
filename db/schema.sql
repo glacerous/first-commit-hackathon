@@ -1,56 +1,62 @@
--- Repoly Database Schema
+BEGIN;
 
--- Repositories
-CREATE TABLE IF NOT EXISTS repos (
-    id SERIAL PRIMARY KEY,
-    url TEXT NOT NULL UNIQUE,
-    owner TEXT NOT NULL,
-    name TEXT NOT NULL,
-    default_branch TEXT NOT NULL DEFAULT 'main',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS public.repos (
+  id SERIAL PRIMARY KEY,
+  url TEXT UNIQUE NOT NULL,
+  owner TEXT NOT NULL,
+  name TEXT NOT NULL,
+  default_branch TEXT NOT NULL DEFAULT 'main',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Analysis Jobs
-CREATE TABLE IF NOT EXISTS analysis_jobs (
-    id SERIAL PRIMARY KEY,
-    repo_id INTEGER REFERENCES repos(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed
-    progress INTEGER DEFAULT 0,
-    error TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS public.analysis_jobs (
+  id SERIAL PRIMARY KEY,
+  repo_id INT NOT NULL REFERENCES public.repos(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  progress INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Detected Components
-CREATE TABLE IF NOT EXISTS detected_components (
-    id SERIAL PRIMARY KEY,
-    repo_id INTEGER REFERENCES repos(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL, -- e.g., library, framework, tool
-    name TEXT NOT NULL,
-    confidence FLOAT DEFAULT 1.0,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS public.detected_components (
+  id SERIAL PRIMARY KEY,
+  repo_id INT NOT NULL REFERENCES public.repos(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT,
+  version TEXT,
+  confidence NUMERIC,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Evidence for Detected Components
-CREATE TABLE IF NOT EXISTS evidence (
-    id SERIAL PRIMARY KEY,
-    component_id INTEGER REFERENCES detected_components(id) ON DELETE CASCADE,
-    path TEXT NOT NULL,
-    reason TEXT,
-    excerpt TEXT,
-    line_start INTEGER,
-    line_end INTEGER,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS public.evidence (
+  id SERIAL PRIMARY KEY,
+  component_id INT NOT NULL REFERENCES public.detected_components(id) ON DELETE CASCADE,
+  file_path TEXT,
+  snippet TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Project Entry Points
-CREATE TABLE IF NOT EXISTS entry_points (
-    id SERIAL PRIMARY KEY,
-    repo_id INTEGER REFERENCES repos(id) ON DELETE CASCADE,
-    path TEXT NOT NULL,
-    type TEXT NOT NULL, -- e.g., main, index, config
-    reason TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+COMMIT;
+
+
+ALTER TABLE public.analysis_jobs
+ADD COLUMN IF NOT EXISTS leased_until TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS worker_id TEXT,
+ADD COLUMN IF NOT EXISTS error_message TEXT,
+ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
+
+BEGIN;
+
+ALTER TABLE public.analysis_jobs
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS error_message TEXT,
+ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
+
+-- biar updated_at otomatis ke-update saat row berubah (opsional; paling simpel: update manual di query)
+-- kalau mau benar, bisa pakai trigger. Tapi hackathon: manual update di UPDATE query aja.
+
+CREATE INDEX IF NOT EXISTS idx_analysis_jobs_repo_created
+ON public.analysis_jobs (repo_id, created_at DESC);
+
+COMMIT;

@@ -59,55 +59,78 @@ app.post("/api/repos", async (req, res) => {
 
 // List all repositories
 app.get("/api/repos", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT r.*, 
-                   aj.status as latest_job_status, 
-                   aj.progress as latest_job_progress
-            FROM repos r
-            LEFT JOIN LATERAL (
-                SELECT status, progress 
-                FROM analysis_jobs 
-                WHERE repo_id = r.id 
-                ORDER BY created_at DESC 
-                LIMIT 1
-            ) aj ON true
-            ORDER BY r.created_at DESC
-        `);
-        res.json(result.rows);
-    } catch (error: any) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const result = await pool.query(`
+      SELECT
+        r.id, r.url, r.owner, r.name, r.default_branch, r.created_at, r.updated_at,
+        aj.id AS latest_job_id,
+        aj.status AS latest_job_status,
+        aj.progress AS latest_job_progress,
+        aj.error_message AS latest_job_error,
+        aj.created_at AS latest_job_created_at,
+        aj.finished_at AS latest_job_finished_at
+      FROM public.repos r
+      LEFT JOIN LATERAL (
+        SELECT id, status, progress, error_message, created_at, finished_at
+        FROM public.analysis_jobs
+        WHERE repo_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) aj ON true
+      ORDER BY r.created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get repository details including findings
 app.get("/api/repos/:id", async (req, res) => {
-    const { id } = req.params;
-    try {
-        const repoRes = await pool.query('SELECT * FROM repos WHERE id = $1', [id]);
-        if (repoRes.rows.length === 0) {
-            return res.status(404).json({ error: "Repository not found" });
-        }
+  const { id } = req.params;
 
-        const componentsRes = await pool.query(`
-            SELECT dc.*, 
-                   (SELECT json_agg(e) FROM evidence e WHERE e.component_id = dc.id) as evidence
-            FROM detected_components dc
-            WHERE dc.repo_id = $1
-        `, [id]);
+  try {
+    const repoRes = await pool.query(`SELECT * FROM public.repos WHERE id=$1`, [id]);
+    if (repoRes.rows.length === 0) return res.status(404).json({ error: "Repository not found" });
 
-        const jobsRes = await pool.query('SELECT * FROM analysis_jobs WHERE repo_id = $1 ORDER BY created_at DESC', [id]);
+    const componentsRes = await pool.query(
+      `
+      SELECT
+        dc.*,
+        COALESCE(
+          json_agg(json_build_object(
+            'id', e.id,
+            'file_path', e.file_path,
+            'snippet', e.snippet,
+            'created_at', e.created_at
+          )) FILTER (WHERE e.id IS NOT NULL),
+          '[]'::json
+        ) AS evidence
+      FROM public.detected_components dc
+      LEFT JOIN public.evidence e ON e.component_id = dc.id
+      WHERE dc.repo_id = $1
+      GROUP BY dc.id
+      ORDER BY COALESCE(dc.confidence,0) DESC, dc.created_at DESC
+      `,
+      [id]
+    );
 
-        res.json({
-            repo: repoRes.rows[0],
-            components: componentsRes.rows,
-            analysisJobs: jobsRes.rows
-        });
-    } catch (error: any) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
+    const jobsRes = await pool.query(
+      `SELECT * FROM public.analysis_jobs WHERE repo_id=$1 ORDER BY created_at DESC`,
+      [id]
+    );
+
+    res.json({
+      repo: repoRes.rows[0],
+      components: componentsRes.rows,
+      analysisJobs: jobsRes.rows,
+    });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
