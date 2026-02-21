@@ -210,10 +210,10 @@ export default function LabPage() {
                     transparent: true,
                     opacity: 0.18
                 });
-                const whiteGrid = new THREE.Mesh(geo, wireMat);
-                whiteGrid.rotation.x = -Math.PI / 2;
-                whiteGrid.position.y = -49.8;
-                scene.add(whiteGrid);
+                // const whiteGrid = new THREE.Mesh(geo, wireMat);
+                // whiteGrid.rotation.x = -Math.PI / 2;
+                // whiteGrid.position.y = -49.8;
+                // scene.add(whiteGrid);
             };
 
             const getTerrainY = (x, z) => pseudoNoise(x, z) - 50;
