@@ -6,37 +6,61 @@ import { useSearchParams } from 'next/navigation';
 function LabContent() {
     const containerRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
-    const repo = searchParams.get('repo');
+    const repoId = searchParams.get('repoId');
+    const jobId = searchParams.get('jobId');
 
     // --- REAL API DATA ---
     const [apiComponents, setApiComponents] = useState<any[]>([]);
+    const [jobStatus, setJobStatus] = useState<string>('pending');
+    const [jobProgress, setJobProgress] = useState<number>(0);
+    const [repoName, setRepoName] = useState<string>('');
     const [selectedComponent, setSelectedComponent] = useState<any>(null);
     const onBuildingClickRef = useRef<((data: any) => void) | null>(null);
-    // Keep a ref so Three.js closure can read latest API data without re-running useEffect
+
+    // Keep refs so Three.js closure can read latest state without re-running useEffect
     const apiComponentsRef = useRef<any[]>([]);
+    const jobStatusRef = useRef<string>('pending');
 
-    // Fetch components from API when repo is known
+    // Polling and Fetching
     useEffect(() => {
-        if (!repo) return;
+        if (!repoId) return;
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        // Find repo in API first
-        fetch(`${API_BASE}/api/repos`)
-            .then(r => r.json())
-            .then((repos: any[]) => {
-                const found = repos.find(r => r.url === repo);
-                if (!found) return;
-                return fetch(`${API_BASE}/api/repos/${found.id}`).then(r => r.json());
-            })
-            .then(data => {
-                if (data?.components) setApiComponents(data.components);
-            })
-            .catch(err => console.warn('[Lab] API fetch failed:', err));
-    }, [repo]);
 
-    // Keep apiComponentsRef in sync with state
-    useEffect(() => {
-        apiComponentsRef.current = apiComponents;
-    }, [apiComponents]);
+        let pollTimer: NodeJS.Timeout;
+
+        const fetchData = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/repos/${repoId}`);
+                if (!res.ok) throw new Error('Failed to fetch repo');
+                const data = await res.json();
+
+                setRepoName(data.repo.name);
+
+                const latestJob = data.analysisJobs?.find((j: any) => String(j.id) === String(jobId)) || data.analysisJobs?.[0];
+                if (latestJob) {
+                    setJobStatus(latestJob.status);
+                    setJobProgress(latestJob.progress || 0);
+                    jobStatusRef.current = latestJob.status;
+                }
+
+                if (data.components) {
+                    setApiComponents(data.components);
+                    apiComponentsRef.current = data.components;
+                }
+
+                // Continue polling if not finished
+                if (jobStatusRef.current === 'pending' || jobStatusRef.current === 'running') {
+                    pollTimer = setTimeout(fetchData, 3000);
+                }
+            } catch (err) {
+                console.warn('[Lab] Data fetch failed:', err);
+                pollTimer = setTimeout(fetchData, 5000);
+            }
+        };
+
+        fetchData();
+        return () => clearTimeout(pollTimer);
+    }, [repoId, jobId]);
 
     // Bridge: set the callback so Three.js onClick can update React state
     useEffect(() => {
@@ -87,40 +111,6 @@ function LabContent() {
             const { GammaCorrectionShader } = await eval(`import('https://unpkg.com/three@0.161.0/examples/jsm/shaders/GammaCorrectionShader.js')`);
             const { RoundedBoxGeometry } = await eval(`import('https://unpkg.com/three@0.161.0/examples/jsm/geometries/RoundedBoxGeometry.js')`);
 
-            // --- MOCK DATA (visual shapes / layout) ---
-            const MOCK = {
-                languages: [
-                    { name: "TypeScript", pct: 85 }, { name: "Go", pct: 65 },
-                    { name: "SQL", pct: 45 }, { name: "Python", pct: 30 }
-                ],
-                backendFrameworks: [
-                    { name: "Express", pct: 70 }, { name: "GORM", pct: 50 },
-                    { name: "FastAPI", pct: 40 }
-                ],
-                frontendFrameworks: [
-                    { name: "Next.js", pct: 75 }, { name: "Tailwind", pct: 90 },
-                    { name: "React", pct: 85 }
-                ],
-                storage: [
-                    { name: "PostgreSQL", pct: 60 }, { name: "Redis", pct: 40 }
-                ],
-                devops: [
-                    { name: "Kubernetes", pct: 55 }, { name: "Actions", pct: 80 },
-                    { name: "Terraform", pct: 45 }
-                ],
-                unknownTools: [
-                    { name: "Groq LLM", pct: 95 }, { name: "OpenSpec", pct: 85 },
-                    { name: "Repoly Core", pct: 70 }
-                ],
-                edges: [
-                    { from: "languages", to: "backendFrameworks" },
-                    { from: "backendFrameworks", to: "storage" },
-                    { from: "backendFrameworks", to: "frontendFrameworks" },
-                    { from: "devops", to: "backendFrameworks" },
-                    { from: "unknownTools", to: "devops" }
-                ]
-            };
-
             const THEME = {
                 bg: 0x070a0f,
                 terrain: 0x0a0c0e,
@@ -142,7 +132,7 @@ function LabContent() {
             // --- ENGINE VARS ---
             let scene, camera, renderer, composer, controls, raycaster, mouse;
             let hoveredGroup = null;
-            let cablesGroup;
+            let cablesGroup, buildingsGroup;
 
             const pickables: any[] = [];
             const animatables: any[] = [];
@@ -151,7 +141,6 @@ function LabContent() {
             const init = () => {
                 scene = new THREE.Scene();
                 scene.background = new THREE.Color(THEME.bg);
-                // scene.fog = new THREE.Fog(THEME.bg, 100, 1000);
 
                 camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 5000);
                 camera.position.set(600, 400, 600);
@@ -192,11 +181,13 @@ function LabContent() {
                 cablesGroup = new THREE.Group();
                 scene.add(cablesGroup);
 
+                buildingsGroup = new THREE.Group();
+                scene.add(buildingsGroup);
+
                 raycaster = new THREE.Raycaster();
                 mouse = new THREE.Vector2();
 
-                buildInfrastructure();
-                createInfrastructureCables();
+                syncInfrastructure();
                 fitCameraToSceneBounds();
 
                 let isMouseDown = false;
@@ -376,87 +367,130 @@ function LabContent() {
                 return finalizeAsset(group, name, "Tooling", "Gateway", distId, apiData);
             };
 
-            const buildInfrastructure = () => {
-                const mapping = [
-                    { id: "languages", data: MOCK.languages, fact: createLanguageTower },
-                    { id: "backendFrameworks", data: MOCK.backendFrameworks, fact: createPowerPlant },
-                    { id: "frontendFrameworks", data: MOCK.frontendFrameworks, fact: createSolarField },
-                    { id: "storage", data: MOCK.storage, fact: createSilo },
-                    { id: "devops", data: MOCK.devops, fact: createTransmissionTower },
-                    { id: "unknownTools", data: MOCK.unknownTools, fact: createTurbine }
-                ];
-                const gridSpacing = 240;
-                mapping.forEach((sec, idx) => {
+            const syncInfrastructure = () => {
+                const comps = apiComponentsRef.current;
+
+                // Group by type
+                const groups: any = {};
+                comps.forEach(c => {
+                    const t = c.type || 'other';
+                    if (!groups[t]) groups[t] = [];
+                    groups[t].push(c);
+                });
+
+                const types = Object.keys(groups);
+                if (types.length === 0) {
+                    // Periodic check for new components if still scanning
+                    if (jobStatusRef.current === 'pending' || jobStatusRef.current === 'running') {
+                        setTimeout(syncInfrastructure, 4000);
+                    }
+                    return;
+                }
+
+                buildingsGroup.clear();
+                pickables.length = 0;
+                districtGroups.length = 0; // Reset district mapping
+                Object.keys(districtGroups).forEach(k => delete districtGroups[k]);
+
+                const gridSpacing = 280;
+                const typeToFact: any = {
+                    language: createLanguageTower,
+                    framework: createPowerPlant,
+                    database: createSilo,
+                    cache: createSilo,
+                    ci_cd: createTransmissionTower,
+                    infra: createTransmissionTower,
+                    tooling: createTurbine,
+                    testing: createTurbine,
+                    other: createTurbine
+                };
+
+                types.forEach((type, idx) => {
                     const ox = (idx % 3) * gridSpacing - gridSpacing;
                     const oz = Math.floor(idx / 3) * gridSpacing - gridSpacing / 2;
-                    const group = new THREE.Group();
-                    group.position.set(ox, 0, oz);
-                    districtGroups[sec.id] = group;
-                    scene.add(group);
-                    sec.data.forEach((item, i) => {
-                        // Look up real API component data by name
-                        const apiComp = apiComponentsRef.current.find(
-                            (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
-                        );
-                        // Merge real API data into the asset if found
-                        const asset = sec.fact(item.name, item.pct || 50, sec.id, apiComp ? {
-                            description: apiComp.description || null,
-                            version: apiComp.version || null,
-                            confidence: typeof apiComp.confidence === 'number' ? apiComp.confidence : null,
-                        } : undefined);
-                        const ax = (i % 2) * 85 - 42 + ox;
-                        const az = Math.floor(i / 2) * 85 - 42 + oz;
+
+                    const distGroup = new THREE.Group();
+                    distGroup.position.set(ox, 0, oz);
+                    districtGroups[type] = distGroup;
+                    buildingsGroup.add(distGroup);
+
+                    groups[type].forEach((item, i) => {
+                        const factory = typeToFact[type] || createTurbine;
+                        const asset = factory(item.name, 70, type, {
+                            description: item.description,
+                            version: item.version,
+                            confidence: item.confidence
+                        });
+
+                        const ax = (i % 2) * 90 - 45 + ox;
+                        const az = Math.floor(i / 2) * 90 - 45 + oz;
                         const ay = getTerrainY(ax, az);
                         asset.position.set(ax, ay, az);
-                        scene.add(asset);
+                        buildingsGroup.add(asset);
                     });
                 });
+
+                createInfrastructureCables();
+
+                // Periodic check for new components if still scanning
+                if (jobStatusRef.current === 'pending' || jobStatusRef.current === 'running') {
+                    setTimeout(syncInfrastructure, 5000);
+                }
             };
 
             const createInfrastructureCables = () => {
+                const types = Object.keys(districtGroups);
+                if (types.length < 2) return;
+
                 cablesGroup.clear();
-                MOCK.edges.forEach(edge => {
-                    const startGroup = districtGroups[edge.from];
-                    const endGroup = districtGroups[edge.to];
-                    if (!startGroup || !endGroup) return;
+
+                // Simple chain connection for now
+                for (let i = 0; i < types.length - 1; i++) {
+                    const from = types[i];
+                    const to = types[i + 1];
+
+                    const startGroup = districtGroups[from];
+                    const endGroup = districtGroups[to];
+                    if (!startGroup || !endGroup) continue;
+
                     const startPos = startGroup.position.clone();
                     const endPos = endGroup.position.clone();
                     const points: any[] = [];
                     const segments = 24;
-                    for (let i = 0; i <= segments; i++) {
-                        const t = i / segments;
+                    for (let j = 0; j <= segments; j++) {
+                        const t = j / segments;
                         const x = startPos.x + (endPos.x - startPos.x) * t;
                         const z = startPos.z + (endPos.z - startPos.z) * t;
                         const y = getTerrainY(x, z) + 1.2;
                         points.push(new THREE.Vector3(x, y, z));
                     }
-                    const bundleSize = 2;
+
                     const bundleGroup = new THREE.Group();
-                    bundleGroup.userData = { from: edge.from, to: edge.to };
-                    for (let i = 0; i < bundleSize; i++) {
-                        const offset = (i - (bundleSize - 1) / 2) * 1.5;
-                        const bPoints = points.map(p => new THREE.Vector3(p.x + offset, p.y, p.z + offset));
-                        const geo = new THREE.BufferGeometry().setFromPoints(bPoints);
-                        const mat = new THREE.LineBasicMaterial({ color: THEME.cable, transparent: true, opacity: 0.08 });
-                        const line = new THREE.Line(geo, mat);
-                        bundleGroup.add(line);
-                        const packet = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0 }));
-                        bundleGroup.add(packet);
-                        const speed = 0.5 + Math.random();
-                        const delay = Math.random() * 2;
-                        animatables.push(() => {
-                            const t = (Date.now() * 0.001 * speed + delay) % 3;
-                            const progress = t / 3;
-                            const idx = Math.floor(progress * segments);
-                            if (idx < points.length) {
-                                packet.position.copy(points[idx]);
-                                packet.position.y += 1;
-                                packet.material.opacity = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 0.6);
-                            }
-                        });
-                    }
+                    bundleGroup.userData = { from, to };
+
+                    const geo = new THREE.BufferGeometry().setFromPoints(points);
+                    const mat = new THREE.LineBasicMaterial({ color: THEME.cable, transparent: true, opacity: 0.1 });
+                    const line = new THREE.Line(geo, mat);
+                    bundleGroup.add(line);
+
+                    const packet = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 8), new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0 }));
+                    bundleGroup.add(packet);
+
+                    const speed = 0.8 + Math.random() * 0.4;
+                    animatables.push(() => {
+                        const t = (Date.now() * 0.001 * speed) % 3;
+                        const progress = t / 3;
+                        const idx = Math.floor(progress * segments);
+                        if (idx < points.length) {
+                            packet.position.copy(points[idx]);
+                            packet.position.y += 2;
+                            packet.material.opacity = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 0.6);
+                            packet.scale.setScalar(0.8 + Math.sin(Date.now() * 0.01) * 0.2);
+                        }
+                    });
+
                     cablesGroup.add(bundleGroup);
-                });
+                }
             };
 
             const fitCameraToSceneBounds = () => {
@@ -838,21 +872,21 @@ function LabContent() {
             <div id="ui-overlay">
                 <div className="hud-card scope-block">
                     <div className="scope-item"><span>REGION</span> <span>PX-992</span></div>
-                    <div className="scope-item"><span>TIME</span> <span id="clock">17:04:23</span></div>
-                    <div className="scope-item"><span>CONNECTIONS</span> <span>STABLE</span></div>
-                    <div className="scope-item"><span>SURFACE</span> <span className="uppercase">{repo ? repo.split('/').pop() : 'HOLOGRAPHIC'}</span></div>
+                    <div className="scope-item"><span>TIME</span> <span id="clock">--:--:--</span></div>
+                    <div className="scope-item"><span>CONNECTIONS</span> <span className={jobStatus === 'failed' ? 'text-red-500' : 'text-emerald-400'}>{jobStatus.toUpperCase()}</span></div>
+                    <div className="scope-item"><span>SURFACE</span> <span className="uppercase">{repoName || 'SCANNING...'}</span></div>
                 </div>
 
                 <div className="hud-card stats-card">
-                    <div className="stats-header">THREAT ACTIVITY</div>
+                    <div className="stats-header">ANALYSIS PROGRESS</div>
                     <div className="stats-main">
                         <div>
-                            <div className="stats-number">0.42</div>
-                            <div className="stats-sub">NOMINAL</div>
+                            <div className="stats-number">{Math.round(jobProgress)}%</div>
+                            <div className="stats-sub">{jobStatus.toUpperCase()}</div>
                         </div>
                         <svg className="stats-ring" viewBox="0 0 36 36">
                             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2ef2c833" strokeWidth="2" />
-                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2ef2c8" strokeWidth="2" strokeDasharray="42, 100" />
+                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2ef2c8" strokeWidth="2" strokeDasharray={`${jobProgress}, 100`} />
                         </svg>
                     </div>
                 </div>
@@ -864,17 +898,17 @@ function LabContent() {
                             <div className="metric-bars" id="load-bars"></div>
                         </div>
                         <div className="metric-group">
-                            <div className="metric-label">STABLE ZONES</div>
-                            <div className="stats-sub">12 ACTIVE</div>
+                            <div className="metric-label">COMPONENTS</div>
+                            <div className="stats-sub">{apiComponents.length} DETECTED</div>
                         </div>
                         <div className="metric-group">
-                            <div className="metric-label">CRITICAL ZONES</div>
+                            <div className="metric-label">THREAT LEVEL</div>
                             <div style={{ fontSize: '11px', color: '#ef4444' }}>0 NONE</div>
                         </div>
                     </div>
-                    <div className="status-pill">
-                        <div className="status-dot"></div>
-                        CONNECTING TO {repo ? repo.split('/').slice(-2).join('/') : 'REMOTE'}...
+                    <div className="status-pill" style={{ borderColor: jobStatus === 'failed' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(46, 242, 200, 0.3)', color: jobStatus === 'failed' ? '#fca5a5' : '#2ef2c8', background: jobStatus === 'failed' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(46, 242, 200, 0.1)' }}>
+                        <div className="status-dot" style={{ backgroundColor: jobStatus === 'failed' ? '#ef4444' : '#2ef2c8' }}></div>
+                        {jobStatus === 'done' || jobStatus === 'succeeded' ? 'ANALYSIS COMPLETE' : `ANALYZING ${repoName || 'REPOSITORY'}...`}
                     </div>
                 </div>
             </div>

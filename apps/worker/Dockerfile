@@ -12,6 +12,7 @@ RUN npm run build -w apps/worker
 
 # Production stage
 FROM node:20-slim AS runner
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=base /app/package.json ./
 COPY --from=base /app/node_modules ./node_modules

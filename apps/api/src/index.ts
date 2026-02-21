@@ -23,6 +23,12 @@ export const pool = new Pool(process.env.DATABASE_URL ? {
 app.use(cors());
 app.use(express.json());
 
+// Request logger
+app.use((req, res, next) => {
+  console.log(`[API] ${req.method} ${req.url}`);
+  next();
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });

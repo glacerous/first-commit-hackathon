@@ -23,8 +23,36 @@ const pool = new Pool(process.env.DATABASE_URL ? {
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
 const POLL_MS = Number(process.env.POLL_MS || 5000);
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY");
+
+/**
+ * Build an authenticated clone URL if GITHUB_TOKEN is available.
+ * Returns both the actual clone URL and a safe URL for logging.
+ */
+function buildCloneUrl(repoUrl: string): { cloneUrl: string; safeUrl: string } {
+  // Normalize to .git
+  const normalized = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`;
+
+  if (!GITHUB_TOKEN) {
+    return { cloneUrl: normalized, safeUrl: normalized };
+  }
+
+  // Check if it's a GitHub HTTPS URL
+  const githubMatch = normalized.match(/^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+)$/);
+  if (githubMatch) {
+    const owner = githubMatch[1];
+    const repo = githubMatch[2];
+    // https://x-access-token:<TOKEN>@github.com/org/repo.git
+    return {
+      cloneUrl: `https://x-access-token:${GITHUB_TOKEN}@github.com/${owner}/${repo}`,
+      safeUrl: `https://github.com/${owner}/${repo}`,
+    };
+  }
+
+  return { cloneUrl: normalized, safeUrl: normalized };
+}
 
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
@@ -290,7 +318,10 @@ async function processJob(jobId: number, repoId: number) {
   const repoDir = path.join(tmpDir, "repo");
 
   try {
-    await simpleGit().clone(repo.url, repoDir, ["--depth", "1", "--branch", repo.default_branch || "main"]);
+    const { cloneUrl, safeUrl } = buildCloneUrl(repo.url);
+    console.log(`[Worker] Cloning ${safeUrl} into ${repoDir}`);
+
+    await simpleGit().clone(cloneUrl, repoDir, ["--depth", "1", "--branch", repo.default_branch || "main"]);
     await pool.query(`UPDATE public.analysis_jobs SET progress=$1, updated_at=NOW() WHERE id=$2`, [30, jobId]);
 
     const evidencePack = await buildEvidencePack(repoDir);
