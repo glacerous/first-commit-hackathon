@@ -112,7 +112,7 @@ export default function LabPage() {
             const init = () => {
                 scene = new THREE.Scene();
                 scene.background = new THREE.Color(THEME.bg);
-                scene.fog = new THREE.Fog(THEME.bg, 100, 1000);
+                // scene.fog = new THREE.Fog(THEME.bg, 100, 1000);
 
                 camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 5000);
                 camera.position.set(600, 400, 600);
