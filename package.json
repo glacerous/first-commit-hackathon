@@ -1,0 +1,13 @@
+{
+  "name": "repoly",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npx ts-node-dev apps/api/src/index.ts",
+    "dev:worker": "npx ts-node-dev apps/worker/src/index.ts"
+  }
+}
