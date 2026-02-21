@@ -278,7 +278,6 @@ Output a single JSON object with EXACT shape:
       "type": "language|framework|library|ui_component|state_management|validation|animation|database|cache|ci_cd|tooling|infra|testing|other",
       "version": "string or null",
       "confidence": 0.0-1.0,
-      "description": "1-2 sentences what this does in this repo",
       "evidence": [
         { "file_path": "path from found_files", "snippet": "short proof" }
       ]
@@ -291,7 +290,6 @@ Output a single JSON object with EXACT shape:
 - For @radix-ui/* packages, group them as one entry named "Radix UI" unless there are many; or split by component.
 - confidence should be 1.0 for anything explicitly listed in package.json.
 - evidence.file_path MUST be one of found_files.
-- description must be a non-empty string.
 `.trim();
 
   const user = {
@@ -341,12 +339,6 @@ Output a single JSON object with EXACT shape:
         continue;
       }
 
-      if (typeof c.description !== "string" || !c.description.trim()) {
-        c.description = "No description available.";
-      } else {
-        c.description = c.description.trim().slice(0, 500);
-      }
-
       if (!Array.isArray(c.evidence) || c.evidence.length === 0) {
         // Find any package.json in found files
         const pkgFile = input.foundPaths.find(p => p.endsWith("package.json")) ?? input.foundPaths[0] ?? "package.json";
@@ -385,7 +377,6 @@ Output a single JSON object with EXACT shape:
     type: string;
     version: string | null;
     confidence: number;
-    description: string | null;
     evidence: Array<{ file_path: string; snippet: string }>;
   }>;
 }
@@ -404,11 +395,11 @@ async function insertAll(repoId: number, comps: any[]) {
   for (const c of comps) {
     const ins = await pool.query(
       `
-      INSERT INTO public.detected_components (repo_id, name, type, version, confidence, description)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      INSERT INTO public.detected_components (repo_id, name, type, version, confidence)
+      VALUES ($1,$2,$3,$4,$5)
       RETURNING id
       `,
-      [repoId, c.name, c.type, c.version ?? null, c.confidence, c.description ?? null]
+      [repoId, c.name, c.type, c.version ?? null, c.confidence]
     );
     const componentId = Number(ins.rows[0].id);
 

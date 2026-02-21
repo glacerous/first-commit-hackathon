@@ -57,6 +57,43 @@ app.post("/api/repos", async (req, res) => {
   }
 });
 
+// Bulk insert/update tech docs
+app.post("/api/tech-docs/bulk", async (req, res) => {
+  const docs = req.body; // Array of { name, description, url }
+
+  if (!Array.isArray(docs)) {
+    return res.status(400).json({ error: "Body must be an array of tech docs" });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const doc of docs) {
+        await client.query(
+          `INSERT INTO tech_docs (name, description, documentation_url, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (name) DO UPDATE SET
+             description = EXCLUDED.description,
+             documentation_url = EXCLUDED.documentation_url,
+             updated_at = NOW()`,
+          [doc.name, doc.description, doc.url]
+        );
+      }
+      await client.query('COMMIT');
+      res.json({ message: "Tech docs updated", count: docs.length });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // List all repositories
 app.get("/api/repos", async (req, res) => {
   try {
@@ -98,27 +135,39 @@ app.get("/api/repos/:id", async (req, res) => {
     const componentsRes = await pool.query(
       `
       SELECT
-        dc.*,
-        COALESCE(
-          json_agg(json_build_object(
-            'id', e.id,
-            'file_path', e.file_path,
-            'snippet', e.snippet,
-            'created_at', e.created_at
-          )) FILTER (WHERE e.id IS NOT NULL),
-          '[]'::json
-        ) AS evidence
+        dc.id, dc.name, dc.type, dc.version, dc.confidence,
+        td.description as doc_description,
+      td.documentation_url as doc_url,
+      COALESCE(
+        json_agg(json_build_object(
+          'id', e.id,
+          'file_path', e.file_path,
+          'snippet', e.snippet,
+          'created_at', e.created_at
+        )) FILTER(WHERE e.id IS NOT NULL),
+        '[]':: json
+      ) AS evidence
       FROM public.detected_components dc
       LEFT JOIN public.evidence e ON e.component_id = dc.id
+      LEFT JOIN LATERAL(
+        SELECT description, documentation_url
+        FROM public.tech_docs
+        WHERE 
+          LOWER(TRIM(dc.name)) = LOWER(TRIM(name)) OR
+          LOWER(dc.name) LIKE '%' || LOWER(name) || '%' OR
+          LOWER(name) LIKE '%' || LOWER(dc.name) || '%'
+        ORDER BY(LOWER(TRIM(dc.name)) = LOWER(TRIM(name))) DESC, length(name) DESC
+        LIMIT 1
+      ) td ON true
       WHERE dc.repo_id = $1
-      GROUP BY dc.id
-      ORDER BY COALESCE(dc.confidence,0) DESC, dc.created_at DESC
+      GROUP BY dc.id, td.description, td.documentation_url
+      ORDER BY COALESCE(dc.confidence, 0) DESC, dc.created_at DESC
       `,
       [id]
     );
 
     const jobsRes = await pool.query(
-      `SELECT * FROM public.analysis_jobs WHERE repo_id=$1 ORDER BY created_at DESC`,
+      `SELECT * FROM public.analysis_jobs WHERE repo_id = $1 ORDER BY created_at DESC`,
       [id]
     );
 

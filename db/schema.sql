@@ -61,6 +61,14 @@ ON public.analysis_jobs (repo_id, created_at DESC);
 
 COMMIT;
 
--- Add description to detected_components for LLM-generated descriptions
-ALTER TABLE public.detected_components
-ADD COLUMN IF NOT EXISTS description TEXT;
+-- Keep detected_components clean; descriptions move to tech_docs join
+-- ALTER TABLE public.detected_components DROP COLUMN IF EXISTS description; -- We skip dropping for now to keep it additive/safe in SQL file but stop using it.
+
+CREATE TABLE IF NOT EXISTS public.tech_docs (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  description TEXT,
+  documentation_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -289,8 +289,9 @@ function LabContent() {
                 return group;
             };
 
-            const createLanguageTower = (name, pct, distId, apiData?: any) => {
+            const createLanguageTower = (name, distId, apiData?: any) => {
                 const group = new THREE.Group();
+                const pct = apiData?.pct || 70;
                 const h = pct * 2.2, w = 18;
                 const bodyGeo = new RoundedBoxGeometry(w, h, w, 2, 2);
                 const body = new THREE.Mesh(bodyGeo.translate(0, h / 2, 0), createAssetMaterial('language'));
@@ -432,10 +433,12 @@ function LabContent() {
 
                     groups[type].forEach((item, i) => {
                         const factory = typeToFact[type] || createTurbine;
-                        const asset = factory(item.name, 70, type, {
-                            description: item.description,
+                        const asset = factory(item.name, type, {
+                            description: item.doc_description || item.description,
                             version: item.version,
-                            confidence: item.confidence
+                            confidence: item.confidence,
+                            docUrl: item.doc_url,
+                            pct: 70
                         });
 
                         const ax = (i % 2) * 90 - 45 + ox;
@@ -959,6 +962,22 @@ function LabContent() {
                                     />
                                 </div>
                                 <span className="modal-conf-label">{Math.round(selectedComponent.confidence * 100)}%</span>
+                            </div>
+                        )}
+                        {selectedComponent.docUrl && (
+                            <div className="mt-6">
+                                <a
+                                    href={selectedComponent.docUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 rounded-lg border border-[#2ef2c8]/30 bg-[#2ef2c8]/10 px-4 py-2 text-xs font-bold text-[#2ef2c8] transition-all hover:bg-[#2ef2c8]/20"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                    </svg>
+                                    DOCUMENTATION
+                                </a>
                             </div>
                         )}
                         <div className="mt-8 border-t border-white/5 pt-6">
