@@ -6,49 +6,178 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Repoly 3D Lab - Visual Refinement</title>
     <style>
+        :root {
+            --accent: #2ef2c8;
+            --secondary: #86a8ff;
+            --bg-ui: rgba(10, 12, 14, 0.55);
+            --border-ui: rgba(255, 255, 255, 0.08);
+            --text-main: #e5e7eb;
+            --text-muted: #9ca3af;
+        }
+
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #fbfbfc;
+            background-color: #070a0f;
             font-family: 'Inter', -apple-system, sans-serif;
+            color: var(--text-main);
         }
 
-        #info {
+        /* --- TACTICAL UI OVERLAY --- */
+        #ui-overlay {
             position: absolute;
-            top: 24px;
-            left: 24px;
-            padding: 24px;
-            background: rgba(255, 255, 255, 0.98);
-            color: #1a1a1b;
-            border: 1px solid rgba(0, 0, 0, 0.04);
-            border-radius: 12px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
-            display: none;
-            backdrop-filter: blur(16px);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
-            min-width: 260px;
-            z-index: 100;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 32px;
+            box-sizing: border-box;
         }
 
-        #info h3 {
-            margin: 0 0 12px 0;
-            color: #111;
-            font-size: 16px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+        .hud-card {
+            background: var(--bg-ui);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-ui);
+            border-radius: 16px;
+            padding: 20px;
+            pointer-events: auto;
         }
 
-        #info p {
-            margin: 6px 0;
-            font-size: 14px;
-            color: #666;
-            line-height: 1.5;
+        /* Top Left: Scope */
+        .scope-block {
+            align-self: flex-start;
+            min-width: 220px;
         }
 
-        #info .accent {
-            color: #000;
-            font-weight: 600;
+        .scope-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 4px;
+        }
+
+        .scope-item span:last-child {
+            color: var(--accent);
+        }
+
+        /* Right Stats */
+        .stats-card {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            width: 240px;
+        }
+
+        .stats-header {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .stats-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stats-number {
+            font-size: 32px;
+            font-weight: 800;
+        }
+
+        .stats-sub {
+            font-size: 11px;
+            color: var(--accent);
+        }
+
+        .stats-ring {
+            width: 40px;
+            height: 40px;
+        }
+
+        /* Bottom Strip */
+        .bottom-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+
+        .analytics-block {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .metric-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metric-label {
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+
+        .metric-bars {
+            display: flex;
+            gap: 2px;
+            height: 12px;
+            align-items: flex-end;
+        }
+
+        .bar {
+            width: 3px;
+            background: var(--accent);
+            opacity: 0.3;
+        }
+
+        .bar.active {
+            opacity: 0.8;
+        }
+
+        .status-pill {
+            padding: 4px 12px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 20px;
+            font-size: 10px;
+            color: #fca5a5;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
         }
 
         #tooltip {
@@ -61,60 +190,77 @@
             font-weight: 500;
             pointer-events: none;
             display: none;
-            z-index: 200;
-            white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 2000;
+            border: 1px solid var(--border-ui);
             backdrop-filter: blur(4px);
         }
 
-        #legend {
-            position: absolute;
-            bottom: 32px;
-            right: 32px;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.85);
-            border: 1px solid rgba(0, 0, 0, 0.04);
-            border-radius: 10px;
-            font-size: 10px;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            color: #555;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .color-box {
-            width: 10px;
-            height: 10px;
-            margin-right: 12px;
-            border-radius: 2px;
-            border: 1px solid rgba(0, 0, 0, 0.05);
+        .global-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+            background-size: 40px 40px, 120px 120px, 120px 120px;
+            pointer-events: none;
+            z-index: 500;
         }
     </style>
 </head>
 
 <body>
-    <div id="info">
-        <h3>Asset Intel</h3>
-        <div id="details-content"></div>
-    </div>
-    <div id="tooltip"></div>
-
-    <div id="legend">
-        <div class="legend-item">
-            <div class="color-box" style="background: #F3F4F6;"></div> Infrastructure Component
+    <div class="global-grid"></div>
+    <div id="ui-overlay">
+        <div class="hud-card scope-block">
+            <div class="scope-item"><span>REGION</span> <span>PX-992</span></div>
+            <div class="scope-item"><span>TIME</span> <span id="clock">15:07:07</span></div>
+            <div class="scope-item"><span>CONNECTIONS</span> <span>STABLE</span></div>
+            <div class="scope-item"><span>SURFACE VIEW</span> <span>HOLOGRAPHIC</span></div>
         </div>
-        <div class="legend-item" style="opacity: 0.4; font-size: 8px;">VISUAL FIDELITY: HIGH-REF MATCH</div>
+
+        <div class="hud-card stats-card">
+            <div class="stats-header">THREAT ACTIVITY</div>
+            <div class="stats-main">
+                <div>
+                    <div class="stats-number">0.42</div>
+                    <div class="stats-sub">NOMINAL</div>
+                </div>
+                <svg class="stats-ring" viewBox="0 0 36 36">
+                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none"
+                        stroke="#2ef2c833" stroke-width="2" />
+                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none"
+                        stroke="var(--accent)" stroke-width="2" stroke-dasharray="42, 100" />
+                </svg>
+            </div>
+        </div>
+
+        <div class="hud-card bottom-strip">
+            <div class="analytics-block">
+                <div class="metric-group">
+                    <div class="metric-label">SYSTEM_LOAD</div>
+                    <div class="metric-bars" id="load-bars"></div>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-label">STABLE ZONES</div>
+                    <div class="stats-sub">12 ACTIVE</div>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-label">CRITICAL ZONES</div>
+                    <div style="font-size:11px; color:#ef4444;">0 NONE</div>
+                </div>
+            </div>
+            <div class="status-pill">
+                <div class="status-dot"></div>
+                UNSTABLE CONNECTION [MOCKED]
+            </div>
+        </div>
     </div>
+
+    <div id="tooltip"></div>
 
     <script type="importmap">
         {
@@ -134,37 +280,79 @@
         import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
         import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
         import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-        // --- MOCK DATA ---
+        /**
+         * Prototype only; mock data; no backend; no ShadowMaterial floors.
+         * 
+         * RUN INSTRUCTIONS:
+         * cd apps/web
+         * npm run dev
+         * open http://localhost:3000/lab/engine.html
+         */
+
+        // --- MOCK DATA (Enriched) ---
         const MOCK = {
             languages: [
-                { name: "TypeScript", pct: 48 },
-                { name: "Go", pct: 32 },
-                { name: "SQL", pct: 12 },
-                { name: "Dockerfile", pct: 8 }
+                { name: "TypeScript", pct: 85 }, { name: "Go", pct: 65 },
+                { name: "SQL", pct: 45 }, { name: "Python", pct: 30 }
             ],
-            backendFrameworks: ["Express", "GORM"],
-            frontendFrameworks: ["Next.js", "Tailwind"],
-            storage: ["PostgreSQL"],
-            devops: ["Kubernetes", "GitHub Actions"],
-            unknownTools: ["Groq LLM", "OpenSpec"]
+            backendFrameworks: [
+                { name: "Express", pct: 70 }, { name: "GORM", pct: 50 },
+                { name: "FastAPI", pct: 40 }
+            ],
+            frontendFrameworks: [
+                { name: "Next.js", pct: 75 }, { name: "Tailwind", pct: 90 },
+                { name: "React", pct: 85 }
+            ],
+            storage: [
+                { name: "PostgreSQL", pct: 60 }, { name: "Redis", pct: 40 }
+            ],
+            devops: [
+                { name: "Kubernetes", pct: 55 }, { name: "Actions", pct: 80 },
+                { name: "Terraform", pct: 45 }
+            ],
+            unknownTools: [
+                { name: "Groq LLM", pct: 95 }, { name: "OpenSpec", pct: 85 },
+                { name: "Repoly Core", pct: 70 }
+            ],
+            edges: [
+                { from: "languages", to: "backendFrameworks" },
+                { from: "backendFrameworks", to: "storage" },
+                { from: "backendFrameworks", to: "frontendFrameworks" },
+                { from: "devops", to: "backendFrameworks" },
+                { from: "unknownTools", to: "devops" }
+            ]
         };
 
         const THEME = {
-            bg: 0xfbfbfc,
-            asset: 0xF9FAFB,
-            grid: 0xE5E7EB,
-            accent: 0x00D2FF
+            bg: 0x070a0f,
+            terrain: 0x0a0c0e,
+            grid: 0x374151,
+            line1: 0x2ef2c8,
+            line2: 0x86a8ff,
+            asset: 0xd9dde3,
+            cable: 0x2ef2c8,
+            accent: 0x2ef2c8,
+            outlines: 0xffffff,
+            tints: {
+                languages: 0xe5e7eb,
+                storage: 0xe5e7eb,
+                devops: 0xe5e7eb,
+                default: 0xd9dde3
+            }
         };
 
         // --- ENGINE VARS ---
         let scene, camera, renderer, composer, controls, raycaster, mouse;
         let hoveredGroup = null;
-        let selectedGroupId = null;
+        let cablesGroup;
 
         const pickables = [];
         const animatables = [];
-        const d = 140; // Isometric scale constant
+        const districtGroups = {};
+        const d = 160;
+        let shadowTexture;
 
         init();
         animate();
@@ -172,27 +360,22 @@
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(THEME.bg);
-            scene.fog = new THREE.Fog(THEME.bg, 800, 1500);
+            // Fog: Subtle depth fade
+            scene.fog = new THREE.Fog(THEME.bg, 100, 1000);
 
-            // Camera - Better Isometric framing
-            const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 4000);
-            camera.position.set(300, 300, 300);
+            // Camera - Perspective for Depth
+            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.set(600, 400, 600);
             camera.lookAt(0, 0, 0);
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                powerPreference: "high-performance",
-                alpha: false
-            });
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", alpha: false });
             renderer.setClearColor(THEME.bg, 1);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.enabled = false; // No ShadowMaterial floor
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.05;
+            renderer.toneMappingExposure = 1.0;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.body.appendChild(renderer.domElement);
 
@@ -200,62 +383,46 @@
             composer = new EffectComposer(renderer);
             composer.addPass(new RenderPass(scene, camera));
 
-            // SSAO - Refined kernel to avoid artifacting on large planes
-            const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-            ssaoPass.kernelRadius = 8; // Smaller for cleaner lines
-            ssaoPass.minDistance = 0.005;
-            ssaoPass.maxDistance = 0.06;
-            composer.addPass(ssaoPass);
-
-            // Bloom
-            const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.1, 0.2, 0.9);
+            // Bloom tuned ONLY for lines
+            const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.45, 0.35);
             composer.addPass(bloomPass);
-
-            // Final Output Corrector
             composer.addPass(new ShaderPass(GammaCorrectionShader));
 
             // Controls
             controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableRotate = false;
+            controls.enableRotate = true;
             controls.enableDamping = true;
-            controls.screenSpacePanning = true;
+            controls.minPolarAngle = Math.PI / 4;
+            controls.maxPolarAngle = Math.PI / 2.5;
+            controls.rotateSpeed = 0.5;
 
-            // --- LIGHTING RIG (Reference Matched) ---
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-            scene.add(new THREE.HemisphereLight(0xffffff, 0xd0d4d9, 0.4));
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x000000, 0.25));
 
-            // Key Light - Desaturated but strong for defined forms
-            const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-            sun.position.set(150, 250, 150);
-            sun.castShadow = true;
-            sun.shadow.camera.left = -400;
-            sun.shadow.camera.right = 400;
-            sun.shadow.camera.top = 400;
-            sun.shadow.camera.bottom = -400;
-            sun.shadow.mapSize.set(2048, 2048);
-            sun.shadow.bias = -0.00005;
-            sun.shadow.normalBias = 0.08;
-            scene.add(sun);
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            keyLight.position.set(400, 800, 300);
+            keyLight.castShadow = true;
+            keyLight.shadow.camera.left = -1000;
+            keyLight.shadow.camera.right = 1000;
+            keyLight.shadow.camera.top = 1000;
+            keyLight.shadow.camera.bottom = -1000;
+            keyLight.shadow.mapSize.set(2048, 2048);
+            keyLight.shadow.bias = -0.0005;
+            keyLight.shadow.normalBias = 0.08;
+            scene.add(keyLight);
 
-            // Ground - Shrink to target area to avoid horizon artifacts
-            const ground = new THREE.Mesh(
-                new THREE.PlaneGeometry(1000, 1000),
-                new THREE.ShadowMaterial({ opacity: 0.08 })
-            );
-            ground.rotation.x = -Math.PI / 2;
-            ground.position.y = -0.2;
-            ground.receiveShadow = true;
-            scene.add(ground);
+            // WORLD: Terrain
+            createProceduralTerrain();
 
-            // Premium Dotted Floor - Constrain to grounded area
-            createReferenceFloor();
+            cablesGroup = new THREE.Group();
+            scene.add(cablesGroup);
 
-            // Interaction
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2();
 
-            // Build
             buildInfrastructure();
+            createInfrastructureCables();
             fitCameraToSceneBounds();
 
             window.addEventListener('resize', onWindowResize);
@@ -263,9 +430,291 @@
             window.addEventListener('click', onClick);
         }
 
+        // --- NOISE & TERRAIN ---
+        function pseudoNoise(x, z) {
+            // Harmonic sum for terrain
+            let y = Math.sin(x * 0.012) * Math.cos(z * 0.015) * 45;
+            y += Math.sin(x * 0.025 + z * 0.01) * 20;
+            y += Math.cos(x * 0.06) * Math.sin(z * 0.05) * 8;
+            return y;
+        }
+
+        function createProceduralTerrain() {
+            const size = 2000, segments = 80;
+            const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+            const pos = geo.attributes.position;
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                pos.setY(i, pseudoNoise(x, z));
+            }
+            geo.computeVertexNormals();
+
+            // Dark masking surface
+            const mat = new THREE.MeshBasicMaterial({
+                color: THEME.terrain,
+                transparent: true,
+                opacity: 0.95
+            });
+
+            const terrain = new THREE.Mesh(geo, mat);
+            terrain.rotation.x = -Math.PI / 2;
+            terrain.position.y = -50;
+            scene.add(terrain);
+
+            // Holographic Lines Layer 1
+            const edges = new THREE.EdgesGeometry(geo, 1);
+            const lineMat1 = new THREE.LineBasicMaterial({
+                color: THEME.line1,
+                transparent: true,
+                opacity: 0.22
+            });
+            const lines1 = new THREE.LineSegments(edges, lineMat1);
+            lines1.rotation.x = -Math.PI / 2;
+            lines1.position.y = -49.9;
+            scene.add(lines1);
+
+            // Holographic Lines Layer 2 (offset for volumetric feel)
+            const lineMat2 = new THREE.LineBasicMaterial({
+                color: THEME.line2,
+                transparent: true,
+                opacity: 0.10
+            });
+            const lines2 = new THREE.LineSegments(edges, lineMat2);
+            lines2.rotation.x = -Math.PI / 2;
+            lines2.position.y = -49.8;
+            scene.add(lines2);
+
+            // Pulse Animation
+            animatables.push(() => {
+                const t = Date.now() * 0.001;
+                lineMat1.opacity = 0.18 + 0.06 * Math.sin(t * 0.6);
+            });
+        }
+
+        function getTerrainY(x, z) {
+            return pseudoNoise(x, z) - 50;
+        }
+
+        // --- B) SHADING: FRESNEL LIGHT WRAP ---
+        function createAssetMaterial(category = 'default') {
+            const color = THEME.tints[category] || THEME.tints.default;
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.9,
+                metalness: 0.0,
+                transparent: true,
+                opacity: 1.0
+            });
+
+            mat.onBeforeCompile = (shader) => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <lights_fragment_begin>',
+                    `
+                    #include <lights_fragment_begin>
+                    float fresnel = pow(1.0 - dot(normalize(vViewPosition), normal), 2.0);
+                    reflectedLight.indirectDiffuse += fresnel * 0.12;
+                    `
+                );
+            };
+            return mat;
+        }
+
+        // --- C) SUBTLE OUTLINES ---
+        function addTechnicalOutlines(mesh, group) {
+            const edges = new THREE.EdgesGeometry(mesh.geometry, 25);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+                color: THEME.outlines, transparent: true, opacity: 0.08
+            }));
+            line.position.copy(mesh.position);
+            line.rotation.copy(mesh.rotation);
+            line.scale.copy(mesh.scale);
+            group.add(line);
+        }
+
+        // --- A) PROCEDURAL GEOMETRY HELPERS ---
+        function createRoundedBox(w, h, d, radius = 2) {
+            const geo = new RoundedBoxGeometry(w, h, d, 2, radius);
+            return geo;
+        }
+
+        function finalizeAsset(group, name, category, info, distId) {
+            group.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.userData.outlined !== false) {
+                        addTechnicalOutlines(child, group);
+                    }
+                }
+            });
+            group.userData = { name, category, info, distId };
+            pickables.push(group);
+            return group;
+        }
+
+        function createLanguageTower(name, pct, distId) {
+            const group = new THREE.Group();
+            const h = pct * 2.2, w = 18;
+            const bodyGeo = createRoundedBox(w, h, w);
+            const body = new THREE.Mesh(bodyGeo.translate(0, h / 2, 0), createAssetMaterial('languages'));
+            group.add(body);
+
+            const capW = w + 4;
+            const capGeo = createRoundedBox(capW, 4, capW);
+            const cap = new THREE.Mesh(capGeo.translate(0, h + 2, 0), createAssetMaterial('languages'));
+            group.add(cap);
+
+            return finalizeAsset(group, name, "Language", `${pct}% Complexity`, distId);
+        }
+
+        function createPowerPlant(name, distId) {
+            const group = new THREE.Group();
+            const base = new THREE.Mesh(createRoundedBox(36, 18, 36).translate(0, 9, 0), createAssetMaterial());
+            group.add(base);
+
+            // Stacks
+            for (let i = -1; i <= 1; i += 2) {
+                const stack = new THREE.Mesh(
+                    new THREE.CylinderGeometry(7, 10, 32, 24).translate(i * 10, 25, 0),
+                    createAssetMaterial()
+                );
+                group.add(stack);
+                // Band ring
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(8.5, 1, 8, 32), createAssetMaterial());
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(i * 10, 24, 0);
+                group.add(ring);
+            }
+            return finalizeAsset(group, name, "Engine", "Processor Core", distId);
+        }
+
+        function createSilo(name, distId) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 55, 32).translate(0, 27.5, 0), createAssetMaterial('storage'));
+            group.add(body);
+
+            // Rings
+            [15, 40].forEach(y => {
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(20.5, 1.2, 8, 32), createAssetMaterial('storage'));
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = y;
+                group.add(ring);
+            });
+
+            // Cap
+            const cap = new THREE.Mesh(
+                new THREE.SphereGeometry(20, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 55, 0),
+                createAssetMaterial('storage')
+            );
+            group.add(cap);
+
+            return finalizeAsset(group, name, "Storage", "Data Bulk", distId);
+        }
+
+        function createSolarField(name, distId) {
+            const group = new THREE.Group();
+            for (let i = 0; i < 9; i++) {
+                const panelGroup = new THREE.Group();
+                const pw = 16, ph = 20;
+                const panel = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), createAssetMaterial());
+                panel.rotation.x = -Math.PI / 2;
+                panelGroup.add(panel);
+
+                // Frame
+                const frame = new THREE.Mesh(
+                    new THREE.BoxGeometry(pw + 1.5, 1, ph + 1.5).translate(0, -0.5, 0),
+                    createAssetMaterial({ color: 0xcccccc })
+                );
+                frame.userData.outlined = false;
+                panelGroup.add(frame);
+
+                panelGroup.rotation.x = -Math.PI / 8;
+                panelGroup.position.set((i % 3) * 22 - 22, 6, Math.floor(i / 3) * 26 - 26);
+                group.add(panelGroup);
+            }
+            return finalizeAsset(group, name, "Frontend", "UI Cell", distId);
+        }
+
+        function createTransmissionTower(name, distId) {
+            const group = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(2, 9, 85, 4).translate(0, 42.5, 0), createAssetMaterial('devops'));
+            group.add(pole);
+
+            for (let h = 35; h <= 75; h += 20) {
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(48, 4, 3).translate(0, h, 0), createAssetMaterial('devops'));
+                group.add(arm);
+            }
+            return finalizeAsset(group, name, "DevOps", "Feed Pipeline", distId);
+        }
+
+        function createTurbine(name, distId) {
+            const group = new THREE.Group();
+            // Tower tapered
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(3, 7, 100, 24).translate(0, 50, 0), createAssetMaterial());
+            group.add(tower);
+
+            // Nacelle rounded
+            const nacelle = new THREE.Mesh(createRoundedBox(10, 10, 16).translate(0, 100, 4), createAssetMaterial());
+            group.add(nacelle);
+
+            // Blades
+            const blades = new THREE.Group();
+            blades.position.set(0, 100, 12);
+            group.add(blades);
+
+            for (let i = 0; i < 3; i++) {
+                const blade = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 45, 1).translate(0, 22.5, 0),
+                    createAssetMaterial()
+                );
+                blade.rotation.z = (i * Math.PI * 2) / 3;
+                blades.add(blade);
+            }
+            animatables.push(() => { blades.rotation.z += 0.04; });
+
+            return finalizeAsset(group, name, "Tooling", "Gateway", distId);
+        }
+
+        function buildInfrastructure() {
+            const mapping = [
+                { id: "languages", data: MOCK.languages, fact: createLanguageTower },
+                { id: "backendFrameworks", data: MOCK.backendFrameworks, fact: createPowerPlant },
+                { id: "frontendFrameworks", data: MOCK.frontendFrameworks, fact: createSolarField },
+                { id: "storage", data: MOCK.storage, fact: createSilo },
+                { id: "devops", data: MOCK.devops, fact: createTransmissionTower },
+                { id: "unknownTools", data: MOCK.unknownTools, fact: createTurbine }
+            ];
+
+            const gridSpacing = 240;
+            mapping.forEach((sec, idx) => {
+                const ox = (idx % 3) * gridSpacing - gridSpacing;
+                const oz = Math.floor(idx / 3) * gridSpacing - gridSpacing / 2;
+
+                const group = new THREE.Group();
+                group.position.set(ox, 0, oz);
+                districtGroups[sec.id] = group;
+                scene.add(group);
+
+                sec.data.forEach((item, i) => {
+                    const name = item.name;
+                    const pct = item.pct || 50;
+                    const asset = sec.fact(name, pct, sec.id);
+
+                    const ax = (i % 2) * 85 - 42 + ox;
+                    const az = Math.floor(i / 2) * 85 - 42 + oz;
+                    const ay = getTerrainY(ax, az);
+
+                    asset.position.set(ax, ay, az);
+                    scene.add(asset); // add to scene for direct placement
+                });
+            });
+        }
+
         function createReferenceFloor() {
-            const size = 1000;
-            const divisions = 100;
+            const size = 1200;
+            const divisions = 120;
             const vertices = [];
             for (let i = -size / 2; i <= size / 2; i += size / divisions) {
                 for (let j = -size / 2; j <= size / 2; j += size / divisions) {
@@ -275,235 +724,131 @@
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
             const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 1.0, color: THEME.grid, sizeAttenuation: false }));
-            points.position.y = -0.1;
+            points.position.y = 0.01;
             scene.add(points);
         }
 
-        // --- ASSET FACTORIES ---
+        function createInfrastructureCables() {
+            cablesGroup.clear();
+            MOCK.edges.forEach(edge => {
+                const startGroup = districtGroups[edge.from];
+                const endGroup = districtGroups[edge.to];
+                if (!startGroup || !endGroup) return;
 
-        function createAssetMaterial() {
-            return new THREE.MeshStandardMaterial({
-                color: THEME.asset,
-                roughness: 0.9,
-                metalness: 0.02,
-                transparent: true,
-                opacity: 1.0,
-                emissive: 0x000000,
-                emissiveIntensity: 0
-            });
-        }
+                const startPos = startGroup.position.clone();
+                const endPos = endGroup.position.clone();
 
-        function addBevelEdges(mesh, group) {
-            const edges = new THREE.EdgesGeometry(mesh.geometry);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
-                color: 0x000000,
-                transparent: true,
-                opacity: 0.08
-            }));
-            line.position.copy(mesh.position);
-            line.rotation.copy(mesh.rotation);
-            line.scale.copy(mesh.scale);
-            group.add(line);
-        }
-
-        function finalizeAsset(group, name, category, info) {
-            group.traverse(child => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                    addBevelEdges(child, group);
+                const points = [];
+                const segments = 24;
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = startPos.x + (endPos.x - startPos.x) * t;
+                    const z = startPos.z + (endPos.z - startPos.z) * t;
+                    const y = getTerrainY(x, z) + 1.2;
+                    points.push(new THREE.Vector3(x, y, z));
                 }
-            });
-            group.userData = { name, category, info };
-            pickables.push(group);
-            return group;
-        }
 
-        function createLanguageTower(name, pct) {
-            const group = new THREE.Group();
-            const h = pct * 2.0;
-            const w = 15;
-            const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w).translate(0, h / 2, 0), createAssetMaterial());
-            group.add(body);
-            const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 3, 3, w + 3).translate(0, h + 1.5, 0), createAssetMaterial());
-            group.add(cap);
-            return finalizeAsset(group, name, "Language", `${pct}% Usage`);
-        }
+                const bundleSize = 2;
+                const bundleGroup = new THREE.Group();
+                bundleGroup.userData = { from: edge.from, to: edge.to };
 
-        function createPowerPlant(name) {
-            const group = new THREE.Group();
-            const base = new THREE.Mesh(new THREE.BoxGeometry(25, 14, 25).translate(0, 7, 0), createAssetMaterial());
-            group.add(base);
-            for (let i = -1; i <= 1; i += 2) {
-                const tower = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 20, 24).translate(i * 7, 10, 0), createAssetMaterial());
-                group.add(tower);
-            }
-            return finalizeAsset(group, name, "Backend Framework", "System Engine");
-        }
+                for (let i = 0; i < bundleSize; i++) {
+                    const offset = (i - (bundleSize - 1) / 2) * 1.5;
+                    const bPoints = points.map(p => new THREE.Vector3(p.x + offset, p.y, p.z + offset));
+                    const geo = new THREE.BufferGeometry().setFromPoints(bPoints);
+                    const mat = new THREE.LineBasicMaterial({ color: THEME.cable, transparent: true, opacity: 0.08 });
+                    const line = new THREE.Line(geo, mat);
+                    bundleGroup.add(line);
 
-        function createSolarField(name) {
-            const group = new THREE.Group();
-            for (let i = 0; i < 9; i++) {
-                const panel = new THREE.Mesh(new THREE.BoxGeometry(10, 0.5, 12).translate(0, 0.25, 0), createAssetMaterial());
-                panel.rotation.x = -Math.PI / 8;
-                panel.position.set((i % 3) * 14 - 14, 4, Math.floor(i / 3) * 18 - 18);
-                group.add(panel);
-            }
-            return finalizeAsset(group, name, "Frontend Framework", "UI Core");
-        }
+                    // Pulse particles
+                    const packet = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.8, 8, 8),
+                        new THREE.MeshBasicMaterial({ color: THEME.accent, transparent: true, opacity: 0 })
+                    );
+                    bundleGroup.add(packet);
 
-        function createSilo(name) {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 35, 32).translate(0, 17.5, 0), createAssetMaterial());
-            group.add(body);
-            const top = new THREE.Mesh(new THREE.SphereGeometry(14, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 35, 0), createAssetMaterial());
-            group.add(top);
-            return finalizeAsset(group, name, "Storage", "Data Reservoir");
-        }
-
-        function createTransmissionTower(name) {
-            const group = new THREE.Group();
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 5, 60, 4).translate(0, 30, 0), createAssetMaterial());
-            group.add(pole);
-            for (let h = 25; h <= 55; h += 15) {
-                const arm = new THREE.Mesh(new THREE.BoxGeometry(30, 2, 2).translate(0, h, 0), createAssetMaterial());
-                group.add(arm);
-            }
-            return finalizeAsset(group, name, "DevOps", "Pipeline Infrastructure");
-        }
-
-        function createTurbine(name) {
-            const group = new THREE.Group();
-            const st = new THREE.Mesh(new THREE.CylinderGeometry(2, 4, 75).translate(0, 37.5, 0), createAssetMaterial());
-            group.add(st);
-            const hub = new THREE.Group();
-            hub.position.y = 75;
-            group.add(hub);
-            const blades = new THREE.Group();
-            hub.add(blades);
-            for (let i = 0; i < 3; i++) {
-                const b = new THREE.Mesh(new THREE.BoxGeometry(2.5, 30, 0.5).translate(0, 15, 0), createAssetMaterial());
-                b.rotation.z = (i * Math.PI * 2) / 3;
-                blades.add(b);
-            }
-            animatables.push(() => { blades.rotation.z += 0.03; });
-            return finalizeAsset(group, name, "Tooling", "Gateway");
-        }
-
-        function buildInfrastructure() {
-            const sectors = [
-                { data: MOCK.languages, factory: (d) => createLanguageTower(d.name, d.pct) },
-                { data: MOCK.backendFrameworks, factory: (d) => createPowerPlant(d) },
-                { data: MOCK.frontendFrameworks, factory: (d) => createSolarField(d) },
-                { data: MOCK.storage, factory: (d) => createSilo(d) },
-                { data: MOCK.devops, factory: (d) => createTransmissionTower(d) },
-                { data: MOCK.unknownTools, factory: (d) => createTurbine(d) }
-            ];
-
-            const gridSpacing = 160;
-            sectors.forEach((sec, idx) => {
-                const ox = (idx % 3) * gridSpacing - gridSpacing;
-                const oz = Math.floor(idx / 3) * gridSpacing - gridSpacing / 2;
-
-                sec.data.forEach((item, i) => {
-                    const asset = sec.factory(item);
-                    asset.position.set(ox + (i % 2) * 60 - 30, 0, oz + Math.floor(i / 2) * 60 - 30);
-                    scene.add(asset);
-                });
+                    const speed = 0.5 + Math.random();
+                    const delay = Math.random() * 2;
+                    animatables.push(() => {
+                        const t = (Date.now() * 0.001 * speed + delay) % 3;
+                        const progress = t / 3;
+                        const idx = Math.floor(progress * segments);
+                        if (idx < points.length) {
+                            packet.position.copy(points[idx]);
+                            packet.position.y += 1;
+                            packet.material.opacity = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 0.6);
+                        }
+                    });
+                }
+                cablesGroup.add(bundleGroup);
             });
         }
 
-        // --- CAMERA FIT ---
         function fitCameraToSceneBounds() {
-            const box = new THREE.Box3();
-            pickables.forEach(g => box.expandByObject(g));
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-
-            controls.target.copy(center);
-            const aspect = window.innerWidth / window.innerHeight;
-            const zoomD = Math.max(size.x, size.z) / 1.5;
-
-            camera.left = -zoomD * aspect;
-            camera.right = zoomD * aspect;
-            camera.top = zoomD;
-            camera.bottom = -zoomD;
-            camera.updateProjectionMatrix();
+            camera.position.set(650, 650, 650);
+            camera.lookAt(0, 0, 0);
+            if (controls) controls.target.set(0, 0, 0);
         }
 
         // --- INTERACTION ---
         function onPointerMove(event) {
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
             const tt = document.getElementById('tooltip');
-            tt.style.left = (event.clientX + 15) + 'px';
-            tt.style.top = (event.clientY + 15) + 'px';
-
+            tt.style.left = (event.clientX + 20) + 'px'; tt.style.top = (event.clientY + 20) + 'px';
             raycaster.setFromCamera(mouse, camera);
             const hits = raycaster.intersectObjects(pickables, true);
-
             if (hits.length > 0) {
-                let g = hits[0].object;
-                while (g.parent && !g.userData.name) g = g.parent;
-
+                let g = hits[0].object; while (g.parent && !g.userData.name) g = g.parent;
                 if (hoveredGroup !== g) {
                     if (hoveredGroup) highlight(hoveredGroup, false);
-                    hoveredGroup = g;
-                    highlight(hoveredGroup, true);
+                    hoveredGroup = g; highlight(hoveredGroup, true);
                 }
-                tt.style.display = 'block';
-                tt.innerHTML = `${g.userData.name} | ${g.userData.category}`;
+                tt.style.display = 'block'; tt.innerHTML = `${g.userData.name} • ${g.userData.category}`;
                 document.body.style.cursor = 'pointer';
             } else {
-                if (hoveredGroup) {
-                    highlight(hoveredGroup, false);
-                    hoveredGroup = null;
-                }
-                tt.style.display = 'none';
-                document.body.style.cursor = 'default';
+                if (hoveredGroup) { highlight(hoveredGroup, false); hoveredGroup = null; }
+                tt.style.display = 'none'; document.body.style.cursor = 'default';
             }
         }
 
         function highlight(g, active) {
+            const distId = g.userData.distId;
             g.traverse(c => {
                 if (c.isMesh && c.material.emissive) {
-                    c.material.emissive.setHex(active ? 0x222222 : 0x000000);
+                    c.material.emissive.setHex(active ? 0x00d2ff : 0x000000);
                     c.material.emissiveIntensity = active ? 0.35 : 0;
                 }
             });
-            const s = active ? 1.02 : 1.0;
-            g.scale.set(s, s, s);
+            g.scale.setScalar(active ? 1.04 : 1.0);
+            cablesGroup.children.forEach(bundle => {
+                const con = bundle.userData.from === distId || bundle.userData.to === distId;
+                bundle.children.forEach(line => {
+                    if (line instanceof THREE.Line) {
+                        line.material.color.setHex(active && con ? THEME.accent : THEME.cable);
+                        line.material.opacity = active ? (con ? 0.8 : 0.05) : 0.3;
+                    }
+                });
+            });
         }
 
         function onClick() {
             raycaster.setFromCamera(mouse, camera);
             const hits = raycaster.intersectObjects(pickables, true);
             if (hits.length > 0) {
-                let g = hits[0].object;
-                while (g.parent && !g.userData.name) g = g.parent;
+                let g = hits[0].object; while (g.parent && !g.userData.name) g = g.parent;
                 focus(g);
-            } else {
-                focus(null);
-            }
+            } else focus(null);
         }
 
         function focus(g) {
-            const info = document.getElementById('info');
             if (g) {
                 const ud = g.userData;
-                document.getElementById('details-content').innerHTML = `
-                    <p><span class="accent">CAT:</span> ${ud.category}</p>
-                    <p><span class="accent">ID:</span> ${ud.name}</p>
-                    <p><span class="accent">META:</span> ${ud.info}</p>
-                `;
-                info.style.display = 'block';
                 pickables.forEach(pg => {
                     const isF = pg === g;
-                    pg.traverse(c => { if (c.isMesh) c.material.opacity = isF ? 1.0 : 0.15; });
+                    pg.traverse(c => { if (c.isMesh) c.material.opacity = isF ? 1.0 : 0.2; });
                 });
             } else {
-                info.style.display = 'none';
                 pickables.forEach(pg => { pg.traverse(c => { if (c.isMesh) c.material.opacity = 1.0; }); });
             }
         }
@@ -514,13 +859,44 @@
             composer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        // Initialize UI Elements
+        function initUI() {
+            // Clock
+            setInterval(() => {
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString([], { hour12: false });
+            }, 1000);
+
+            // Load Bars
+            const loadContainer = document.getElementById('load-bars');
+            for (let i = 0; i < 20; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                loadContainer.appendChild(bar);
+            }
+            setInterval(() => {
+                const bars = loadContainer.children;
+                const activeCount = Math.floor(Math.random() * 15) + 5;
+                for (let i = 0; i < bars.length; i++) {
+                    bars[i].classList.toggle('active', i < activeCount);
+                }
+            }, 500);
+        }
+        initUI();
+
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
+
+            // Subtle camera drift
+            const time = Date.now() * 0.001;
+            camera.position.x += Math.sin(time * 0.2) * 0.1;
+            camera.position.z += Math.cos(time * 0.15) * 0.1;
+
             animatables.forEach(f => f());
             composer.render();
         }
     </script>
+
 </body>
 
 </html>
