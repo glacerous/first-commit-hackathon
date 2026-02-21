@@ -9,5 +9,11 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npx ts-node-dev apps/api/src/index.ts",
     "dev:worker": "npx ts-node-dev apps/worker/src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "groq-sdk": "^0.37.0",
+    "pg": "^8.18.0",
+    "simple-git": "^3.32.0"
   }
 }
