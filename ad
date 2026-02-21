@@ -1,0 +1,22 @@
+[33m37b10fd[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: Introduce the home page with GitHub repository URL input, validation, API integration for analysis, and redirection to the lab.
+[33m9b9b225[m feat: fe-be integration
+[33mf6436aa[m Merge branch 'main' of https://github.com/glacerous/first-commit-hackathon
+[33mbc47f50[m feat: Add worker service for repository tech stack detection using Groq AI.
+[33m4db1230[m edit: remove white line in visualizer
+[33m3ac9482[m feat: Implement initial repository analysis service with API, worker, and database schema.
+[33m901991b[m fix: visual-bug on visualizer
+[33mb3ef1da[m edit: remove fog
+[33md9355e3[m feat: initialize API with repository management endpoints, health check, and PostgreSQL integration
+[33m3f93b53[m feat: Define API specifications for repository registry and analysis jobs, including related implementation tasks.
+[33m2cae1e8[m feat: github repo input and convert visual page
+[33mc6e0844[m feat: add original logo
+[33m1b5a82f[m feat: dashboard
+[33m6509330[m feat: Implement initial API for repository management and analysis job scheduling.
+[33m8eaeecb[m feat: visual update
+[33m0cc167b[m feat: project initialization and infra setup with protected credentials
+[33m0170a66[m feat: visual test
+[33md23b431[m feat: add specs and context injection to AI
+[33m31fd675[m[33m ([m[1;31morigin/dev[m[33m, [m[1;32mdev[m[33m)[m feat: initialize openspec
+[33m89520e0[m init: monorepo skeleton
+[33m95d59e5[m init: base structure
+[33m704b74b[m first commit
