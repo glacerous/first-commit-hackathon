@@ -358,9 +358,8 @@ export default function Home() {
         </div>
 
         <div className="relative z-30 flex flex-col items-center">
-          <div className="mb-10 flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
-            <div className="h-1 w-1 rounded-full bg-white shadow-[0_0_8px_white]" />
-            <span className="text-[13px] font-medium text-white">Hackathon Prototype <span className="text-white/60">Live Demo Soon</span></span>
+          <div className="mb-6">
+            <Image src="/repoly.svg" alt="REPOLY" width={300} height={100} priority />
           </div>
 
           <h1 className="text-gradient max-w-[700px] text-[36px] font-medium leading-[1.1] lg:text-[64px]">Understand Any Repository as a Living System</h1>
