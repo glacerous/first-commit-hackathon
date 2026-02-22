@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 function LabContent() {
     const containerRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
+    const router = useRouter();
     const repoId = searchParams.get('repoId');
     const jobId = searchParams.get('jobId');
 
@@ -819,8 +820,39 @@ function LabContent() {
         }
 
         /* Top Left: Scope */
-        .scope-block {
+        .scope-container {
           align-self: flex-start;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        
+        .back-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: rgba(10, 12, 14, 0.55);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 9999px;
+          color: #9ca3af;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: all 0.2s;
+          pointer-events: auto;
+          width: fit-content;
+        }
+        .back-button:hover {
+          color: #fff;
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .scope-block {
           min-width: 220px;
         }
         .scope-item {
@@ -1063,21 +1095,31 @@ function LabContent() {
             <div ref={containerRef} className="absolute inset-0 z-0 h-full w-full" />
 
             <div id="ui-overlay">
-                <div className="hud-card scope-block">
-                    <div className="scope-item"><span>REGION</span> <span>PX-992</span></div>
-                    <div className="scope-item"><span>TIME</span> <span id="clock">--:--:--</span></div>
-                    <div className="scope-item">
-                        <span>SEED</span>
-                        <input
-                            type="text"
-                            value={seed}
-                            onChange={(e) => setSeed(e.target.value)}
-                            className="bg-transparent border-none text-[#2ef2c8] outline-none text-right w-24 font-bold"
-                            style={{ pointerEvents: 'auto' }}
-                        />
+                <div className="scope-container">
+                    <button onClick={() => router.push('/')} className="back-button">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M19 12H5" />
+                            <path d="M12 19l-7-7 7-7" />
+                        </svg>
+                        Dashboard
+                    </button>
+
+                    <div className="hud-card scope-block">
+                        <div className="scope-item"><span>REGION</span> <span>PX-992</span></div>
+                        <div className="scope-item"><span>TIME</span> <span id="clock">--:--:--</span></div>
+                        <div className="scope-item">
+                            <span>SEED</span>
+                            <input
+                                type="text"
+                                value={seed}
+                                onChange={(e) => setSeed(e.target.value)}
+                                className="bg-transparent border-none text-[#2ef2c8] outline-none text-right w-24 font-bold"
+                                style={{ pointerEvents: 'auto' }}
+                            />
+                        </div>
+                        <div className="scope-item"><span>STATUS</span> <span className={jobStatus === 'failed' ? 'text-red-500' : 'text-emerald-400'}>{jobStatus.toUpperCase()}</span></div>
+                        <div className="scope-item"><span>SURFACE</span> <span className="uppercase">{repoName || 'SCANNING...'}</span></div>
                     </div>
-                    <div className="scope-item"><span>STATUS</span> <span className={jobStatus === 'failed' ? 'text-red-500' : 'text-emerald-400'}>{jobStatus.toUpperCase()}</span></div>
-                    <div className="scope-item"><span>SURFACE</span> <span className="uppercase">{repoName || 'SCANNING...'}</span></div>
                 </div>
 
                 <div className="hud-card stats-card">
