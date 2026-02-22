@@ -244,29 +244,28 @@ async function groqDetectComponents(input: {
 
   // FIX 5: Much more aggressive system prompt
   const system = `
-You are a thorough repository technology stack auditor. Your job is to detect EVERY meaningful library, framework, tool, and language used in the repository.
+You are a repository technology stack auditor. Detect EVERY meaningful library, framework, tool, and language used.
 
-## CRITICAL RULE: You MUST create one component entry for EVERY package name in the "all_dependency_names" list provided by the user.
-Do NOT skip any package. If you don't know what a package does, describe it generically.
+CRITICAL:
+- Create ONE component entry for EVERY package in "all_dependency_names". Never skip. If unknown, describe generically.
 
-You MUST identify all categories:
-- **Languages**: TypeScript, JavaScript, Python, Go, Rust, etc.
-- **Frameworks**: Next.js, React, Vue, Nuxt, Express, FastAPI, Gin, etc.
-- **UI Libraries**: Radix UI (each @radix-ui/* is its own component), Shadcn, Lucide React, etc.
-- **State Management**: TanStack Query, SWR, Redux, Zustand, Jotai, etc.
-- **Animation**: Framer Motion, Motion, etc.
-- **Forms & Validation**: React Hook Form, Zod, Yup, etc.
-- **Data/Tables**: TanStack Table, Recharts, etc.
-- **Styling**: Tailwind CSS, class-variance-authority, clsx, tailwind-merge, etc.
-- **Utilities**: date-fns, axios, etc.
-- **Carousel/UI components**: Embla Carousel, Swiper, etc.
-- **Auth**: NextAuth, better-auth, etc.
-- **Database/ORM**: Prisma, @prisma/client, etc.
-- **File Upload**: UploadThing, etc.
-- **Build/Dev Tools**: ESLint, TypeScript, Vite, etc.
-- **CI/CD & Infra**: GitHub Actions, Docker, etc.
+Identify all categories, including:
+Languages (TypeScript, JavaScript, Python, Go, Rust),
+Frameworks (Next.js, React, Vue, Nuxt, Express, FastAPI, Gin),
+UI Libraries (Radix UI / @radix-ui/*, Shadcn, Lucide React),
+State Management (TanStack Query, SWR, Redux, Zustand, Jotai),
+Animation (Framer Motion),
+Forms & Validation (React Hook Form, Zod, Yup),
+Data/Tables (TanStack Table, Recharts),
+Styling (Tailwind CSS, class-variance-authority, clsx, tailwind-merge),
+Utilities (date-fns, axios),
+Carousel/UI (Embla Carousel, Swiper),
+Auth (NextAuth, better-auth),
+Database/ORM (Prisma, @prisma/client),
+File Upload (UploadThing),
+Build/Dev Tools (ESLint, TypeScript, Vite),
+CI/CD & Infra (GitHub Actions, Docker).
 
-## Output Format
 Output a single JSON object with EXACT shape:
 {
   "components": [
@@ -282,10 +281,10 @@ Output a single JSON object with EXACT shape:
   ]
 }
 
-## Rules
-- Create an entry for EVERY item in all_dependency_names. No exceptions.
-- For @radix-ui/* packages, group them as one entry named "Radix UI" unless there are many; or split by component.
-- confidence should be 1.0 for anything explicitly listed in package.json.
+Rules:
+- EVERY item in all_dependency_names must have an entry.
+- @radix-ui/*: group as "Radix UI" unless many, or split by component.
+- confidence = 1.0 if explicitly in package.json.
 - evidence.file_path MUST be one of found_files.
 `.trim();
 
@@ -305,12 +304,12 @@ Output a single JSON object with EXACT shape:
     temperature: 0,
     response_format: { type: "json_object" },
     // FIX 7: Raise max_tokens so a large dep list isn't cut off
-    max_tokens: 400,
+    max_tokens: 8000,
   };
   console.log("[Groq DEBUG] model=", GROQ_MODEL);
   console.log("[Groq DEBUG] max_tokens=", body.max_tokens);
 
-  if (body.max_tokens !== 400) {
+  if (body.max_tokens !== 8000) {
     throw new Error(`[Groq DEBUG] max_tokens is not 400, got ${body.max_tokens}`);
   }
   const resp = await fetch(url, {
