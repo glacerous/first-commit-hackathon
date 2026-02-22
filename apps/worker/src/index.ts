@@ -305,9 +305,14 @@ Output a single JSON object with EXACT shape:
     temperature: 0,
     response_format: { type: "json_object" },
     // FIX 7: Raise max_tokens so a large dep list isn't cut off
-    max_tokens: 8000,
+    max_tokens: 400,
   };
+  console.log("[Groq DEBUG] model=", GROQ_MODEL);
+  console.log("[Groq DEBUG] max_tokens=", body.max_tokens);
 
+  if (body.max_tokens !== 400) {
+    throw new Error(`[Groq DEBUG] max_tokens is not 400, got ${body.max_tokens}`);
+  }
   const resp = await fetch(url, {
     method: "POST",
     headers: {
