@@ -17,8 +17,9 @@ function LabContent() {
     const [selectedComponent, setSelectedComponent] = useState<any>(null);
     const onBuildingClickRef = useRef<((data: any) => void) | null>(null);
     const [seed, setSeed] = useState('HOLOGRAPHIC');
-    const [heightRange, setHeightRange] = useState(100);
+    const heightRange = 100;
     const updateTerrainRef = useRef<((s: string, h: number) => void) | null>(null);
+    const triggerFocusRef = useRef<((name: string | null) => void) | null>(null);
 
     // Keep refs so Three.js closure can read latest state without re-running useEffect
     const apiComponentsRef = useRef<any[]>([]);
@@ -600,6 +601,27 @@ function LabContent() {
                 if (controls) controls.target.set(0, 0, 0);
             };
 
+            triggerFocusRef.current = (name) => {
+                if (!name) {
+                    focus(null);
+                    if (hoveredGroup) { highlight(hoveredGroup, false); hoveredGroup = null; }
+                    if (onBuildingClickRef.current) onBuildingClickRef.current(null);
+                    return;
+                }
+                const target = pickables.find(p => p.userData.name === name);
+                if (target) {
+                    if (hoveredGroup && hoveredGroup !== target) {
+                        highlight(hoveredGroup, false);
+                    }
+                    hoveredGroup = target;
+                    highlight(target, true);
+                    focus(target);
+                    if (onBuildingClickRef.current) {
+                        onBuildingClickRef.current(target.userData);
+                    }
+                }
+            };
+
             const onPointerMove = (event) => {
                 mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                 mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -745,6 +767,20 @@ function LabContent() {
         }
     }, [seed, heightRange]);
 
+    const componentsByType = React.useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        apiComponents.forEach(c => {
+            const t = c.type || 'other';
+            if (!groups[t]) groups[t] = [];
+            groups[t].push(c);
+        });
+        const sortedKeys = Object.keys(groups).sort();
+        return sortedKeys.map(key => ({
+            type: key,
+            items: groups[key].sort((a, b) => a.name.localeCompare(b.name))
+        }));
+    }, [apiComponents]);
+
     return (
         <div className="relative h-screen w-full overflow-hidden bg-[#070a0f] font-sans text-[#e5e7eb]">
             <style jsx>{`
@@ -812,6 +848,59 @@ function LabContent() {
         .stats-number { font-size: 32px; font-weight: 800; }
         .stats-sub { font-size: 11px; color: #2ef2c8; }
         .stats-ring { width: 40px; height: 40px; }
+
+        /* Building List */
+        .building-list-card {
+           position: absolute;
+           top: 154px;
+           right: 32px;
+           width: 240px;
+           bottom: 112px;
+           display: flex;
+           flex-direction: column;
+           padding-right: 8px; /* Room for scrollbar */
+        }
+        .building-list-header {
+           font-size: 10px; color: #9ca3af; margin-bottom: 8px; font-weight: 700; letter-spacing: 0.1em;
+        }
+        .building-list-content {
+           flex: 1;
+           overflow-y: auto;
+           padding-right: 4px;
+           scrollbar-width: none; /* Firefox */
+           -ms-overflow-style: none; /* IE/Edge */
+        }
+        .building-list-content::-webkit-scrollbar { display: none; }
+
+        .building-group-title {
+           font-size: 9px;
+           color: #86a8ff;
+           margin-top: 14px;
+           margin-bottom: 6px;
+           font-weight: 700;
+           letter-spacing: 0.1em;
+           text-transform: uppercase;
+           border-bottom: 1px solid rgba(134, 168, 255, 0.2);
+           padding-bottom: 4px;
+        }
+        .building-group-title:first-child { margin-top: 0; }
+        
+        .building-item {
+           font-size: 11px;
+           color: #e5e7eb;
+           padding: 6px 8px;
+           cursor: pointer;
+           border-radius: 4px;
+           transition: all 0.2s;
+           white-space: nowrap;
+           overflow: hidden;
+           text-overflow: ellipsis;
+        }
+        .building-item:hover {
+           background: rgba(46, 242, 200, 0.15);
+           color: #2ef2c8;
+           padding-left: 12px;
+        }
 
         /* Bottom Strip */
         .bottom-strip {
@@ -987,16 +1076,6 @@ function LabContent() {
                             style={{ pointerEvents: 'auto' }}
                         />
                     </div>
-                    <div className="scope-item">
-                        <span>HEIGHT</span>
-                        <input
-                            type="number"
-                            value={heightRange}
-                            onChange={(e) => setHeightRange(Number(e.target.value))}
-                            className="bg-transparent border-none text-[#2ef2c8] outline-none text-right w-16 font-bold"
-                            style={{ pointerEvents: 'auto' }}
-                        />
-                    </div>
                     <div className="scope-item"><span>STATUS</span> <span className={jobStatus === 'failed' ? 'text-red-500' : 'text-emerald-400'}>{jobStatus.toUpperCase()}</span></div>
                     <div className="scope-item"><span>SURFACE</span> <span className="uppercase">{repoName || 'SCANNING...'}</span></div>
                 </div>
@@ -1014,6 +1093,30 @@ function LabContent() {
                         </svg>
                     </div>
                 </div>
+
+                {!selectedComponent && componentsByType.length > 0 && (
+                    <div className="hud-card building-list-card">
+                        <div className="building-list-header">ASSET DIRECTORY</div>
+                        <div className="building-list-content">
+                            {componentsByType.map(group => (
+                                <div key={group.type}>
+                                    <div className="building-group-title">{group.type.replace(/_/g, ' ')}</div>
+                                    {group.items.map(item => (
+                                        <div
+                                            key={item.name}
+                                            className="building-item"
+                                            onClick={() => {
+                                                if (triggerFocusRef.current) triggerFocusRef.current(item.name);
+                                            }}
+                                        >
+                                            {item.name}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="hud-card bottom-strip">
                     <div className="analytics-block">
