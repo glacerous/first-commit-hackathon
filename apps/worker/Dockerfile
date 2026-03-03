@@ -1,22 +1,20 @@
 FROM node:20-slim AS base
-WORKDIR /app
+WORKDIR /apps/worker
 
 # Install dependencies based on the monorepo structure
-COPY package.json package-lock.json ./
-COPY apps/worker/package.json ./apps/worker/
-RUN npm install -w apps/worker
+COPY package.json ./
+RUN npm install
 
 # Build the application
 COPY . .
-RUN npm run build -w apps/worker
+RUN npm run build
 
 # Production stage
 FROM node:20-slim AS runner
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY --from=base /app/package.json ./
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/apps/worker/package.json ./apps/worker/
-COPY --from=base /app/apps/worker/dist ./apps/worker/dist
+WORKDIR /apps/worker
+COPY --from=base /apps/worker/package.json ./
+COPY --from=base /apps/worker/node_modules ./node_modules
+COPY --from=base /apps/worker/dist ./dist
 
 CMD ["npm", "run", "dev", "-w", "apps/worker"]

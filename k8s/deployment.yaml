@@ -1,8 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DOMAIN: "https://first-commit.hackathon.sev-2.com"
+  GROQ_MODEL: "llama-3.3-70b-versatile"
+  PORT: "3001"
+  NEXT_PUBLIC_API_URL: "/api"
+  PGHOST: "103.185.52.138"
+  PGPORT: "1185"
+  PGDATABASE: "first_commit"
+  PGUSER: "first_commit"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: first-commit
 spec:
   replicas: 1
   selector:
@@ -10,44 +23,99 @@ spec:
       app: api
   template:
     metadata:
+      annotations:
+        repoly.io/restartedAt: "2026-02-22T13:58:00Z"
       labels:
         app: api
     spec:
       containers:
-      - name: api
-        image: <your-registry>/api:latest
-        ports:
-        - containerPort: 3001
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: database-url
-        - name: LLM_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: api-keys
-              key: llm-api-key
+        - name: api
+          image: azzakyraihan/first-commit-api:latest
+          imagePullPolicy: Always
+          command: ["node", "dist/index.js"]
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: PORT
+            - name: DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: DOMAIN
+            - name: GROQ_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: GROQ_MODEL
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: PGHOST
+            - name: PGPORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: PGPORT
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: PGDATABASE
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config-api
+                  key: PGUSER
+
+            # secrets (bukan dari ConfigMap)
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: database-url
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: groq-api-key
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: pg-password
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: groq-api-key
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: github-token
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: api
-  namespace: first-commit
 spec:
   selector:
     app: api
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3001
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3001
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker
-  namespace: first-commit
 spec:
   replicas: 1
   selector:
@@ -55,24 +123,84 @@ spec:
       app: worker
   template:
     metadata:
+      annotations:
+        repoly.io/restartedAt: "2026-02-22T13:58:00Z"
       labels:
         app: worker
     spec:
       containers:
-      - name: worker
-        image: <your-registry>/worker:latest
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: database-url
+        - name: worker
+          image: azzakyraihan/first-commit-worker:latest
+          imagePullPolicy: Always
+          command: ["node", "dist/index.js"]
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PORT
+            - name: DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DOMAIN
+            - name: GROQ_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: GROQ_MODEL
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGHOST
+            - name: PGPORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGPORT
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGDATABASE
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGUSER
+
+            # secrets
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: database-url
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: groq-api-key
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: pg-password
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: groq-api-key
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: github-token
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
-  namespace: first-commit
 spec:
   replicas: 1
   selector:
@@ -80,54 +208,89 @@ spec:
       app: web
   template:
     metadata:
+      annotations:
+        repoly.io/restartedAt: "2026-02-22T13:58:00Z"
       labels:
         app: web
     spec:
       containers:
-      - name: web
-        image: <your-registry>/web:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "http://api"
+        - name: web
+          image: azzakyraihan/first-commit-web:latest
+          imagePullPolicy: Always
+          command: ["sh", "-c", "find /apps/web -name .next; cp -r /apps/web/apps/web/.next /apps/web/.next || true; cp -r /apps/web/apps/web/public /apps/web/public || true; npx next start"]
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEXT_PUBLIC_API_URL
+            - name: DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DOMAIN
+            - name: GROQ_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: GROQ_MODEL
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGHOST
+            - name: PGPORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGPORT
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGDATABASE
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PGUSER
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: web
-  namespace: first-commit
 spec:
   selector:
     app: web
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3000
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 3000
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: repoly-ingress
-  namespace: first-commit
-  annotations:
-    kubernetes.io/ingress.class: nginx
+  name: first-commit-ingress
 spec:
+  ingressClassName: traefik
   rules:
-  - host: first-commit.hackathon.sev-2.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: web
-            port:
-              number: 80
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: api
-            port:
-              number: 80
+    - host: first-commit.hackathon.sev-2.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 80

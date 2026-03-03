@@ -8,14 +8,18 @@ dotenv.config();
 const { Pool } = pg
 
 const app = express();
-export const pool = new Pool({
-  host: process.env.PGHOST,
-  port: Number(process.env.PGPORT),
-  database: process.env.PGDATABASE,
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  ssl: { rejectUnauthorized: false },
-})
+export const pool = new Pool(
+  process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
+    : {
+      host: process.env.PGHOST,
+      port: Number(process.env.PGPORT),
+      database: process.env.PGDATABASE,
+      user: process.env.PGUSER,
+      password: process.env.PGPASSWORD,
+      ssl: { rejectUnauthorized: false },
+    }
+);
 
 app.use(cors());
 app.use(express.json());
